@@ -1,0 +1,44 @@
+# Build stage
+FROM golang:1.22-alpine AS builder
+
+WORKDIR /app
+
+# Install git and migrate
+RUN apk add --no-cache git curl
+
+# Install migrate
+RUN curl -L https://github.com/golang-migrate/migrate/releases/download/v4.16.2/migrate.linux-amd64.tar.gz | tar xvz && \
+    mv migrate /usr/local/bin/migrate && \
+    chmod +x /usr/local/bin/migrate
+
+# Copy go mod files
+COPY backend/go.mod backend/go.sum ./
+RUN go mod download
+
+# Copy source code
+COPY backend/ ./
+
+# Build the application
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o server ./cmd/server
+
+# Final stage
+FROM alpine:latest
+
+RUN apk --no-cache add ca-certificates curl postgresql-client
+
+WORKDIR /root/
+
+# Copy the binary from builder
+COPY --from=builder /app/server .
+
+# Copy migrations
+COPY --from=builder /app/migrations ./migrations
+
+# Copy migrate binary
+COPY --from=builder /usr/local/bin/migrate /usr/local/bin/migrate
+
+# Expose port
+EXPOSE 8080
+
+# Run the server (migrations will be handled by docker-compose)
+CMD ["./server"]

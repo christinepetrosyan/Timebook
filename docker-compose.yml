@@ -1,0 +1,66 @@
+services:
+  postgres:
+    image: postgres:14-alpine
+    container_name: timebook-postgres
+    environment:
+      POSTGRES_USER: timebook
+      POSTGRES_PASSWORD: timebook
+      POSTGRES_DB: timebook
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U timebook"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: timebook-backend
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: timebook
+      DB_PASSWORD: timebook
+      DB_NAME: timebook
+      DB_SSLMODE: disable
+      SERVER_PORT: 8080
+      SERVER_HOST: 0.0.0.0
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      JWT_EXPIRATION_HOURS: 24
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./backend/migrations:/root/migrations
+    command: >
+      sh -c "
+        echo 'Waiting for database...' &&
+        sleep 5 &&
+        echo 'Running migrations...' &&
+        migrate -path /root/migrations -database 'postgres://timebook:timebook@postgres:5432/timebook?sslmode=disable' up &&
+        echo 'Starting server...' &&
+        ./server
+      "
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: timebook-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    environment:
+      - VITE_API_URL=/api
+
+volumes:
+  postgres_data:
+
