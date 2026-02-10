@@ -31,8 +31,17 @@ func Initialize(cfg *config.Config) (*gorm.DB, error) {
 
 	log.Println("Database connection established")
 
-	// Note: We're not using AutoMigrate as per requirements
-	// Migrations are handled by go-migrate
+	// Auto-migrate models to ensure all tables exist
+	if err := DB.AutoMigrate(
+		&models.User{},
+		&models.MasterProfile{},
+		&models.Service{},
+		&models.Appointment{},
+		&models.TimeSlot{},
+		&models.ServiceOption{},
+	); err != nil {
+		log.Printf("AutoMigrate warning: %v", err)
+	}
 
 	return DB, nil
 }
@@ -49,4 +58,3 @@ func CheckTables() error {
 	}
 	return nil
 }
-

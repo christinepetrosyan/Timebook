@@ -12,15 +12,16 @@ type Service struct {
 	UpdatedAt time.Time      `json:"updated_at"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
 
-	MasterID    uint   `gorm:"not null" json:"master_id"`
-	Name        string `gorm:"not null" json:"name"`
-	Description string `gorm:"type:text" json:"description"`
-	Duration    int    `gorm:"not null" json:"duration"` // duration in minutes
+	MasterID    uint    `gorm:"not null" json:"master_id"`
+	Name        string  `gorm:"not null" json:"name"`
+	Description string  `gorm:"type:text" json:"description"`
+	Duration    int     `gorm:"not null" json:"duration"` // duration in minutes
 	Price       float64 `gorm:"not null" json:"price"`
 
 	// Relations
-	Master      MasterProfile `gorm:"foreignKey:MasterID" json:"master,omitempty"`
-	Appointments []Appointment `gorm:"foreignKey:ServiceID" json:"appointments,omitempty"`
+	Master       MasterProfile   `gorm:"foreignKey:MasterID" json:"master,omitempty"`
+	Appointments []Appointment   `gorm:"foreignKey:ServiceID" json:"appointments,omitempty"`
+	Options      []ServiceOption `gorm:"foreignKey:ServiceID" json:"options,omitempty"`
 }
 
 type TimeSlot struct {
@@ -40,3 +41,20 @@ type TimeSlot struct {
 	Service Service       `gorm:"foreignKey:ServiceID" json:"service,omitempty"`
 }
 
+// ServiceOption represents a sub-category/variant of a service
+// with its own name, duration, price and other details.
+type ServiceOption struct {
+	ID        uint           `gorm:"primaryKey" json:"id"`
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
+
+	ServiceID   uint    `gorm:"not null" json:"service_id"`
+	Name        string  `gorm:"not null" json:"name"`
+	Description string  `gorm:"type:text" json:"description"`
+	Duration    int     `gorm:"not null" json:"duration"` // duration in minutes
+	Price       float64 `gorm:"not null" json:"price"`
+
+	// Relations
+	Service Service `gorm:"foreignKey:ServiceID" json:"service,omitempty"`
+}

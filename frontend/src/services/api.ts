@@ -54,8 +54,12 @@ export const userAPI = {
     return response.data
   },
 
-  getAvailableSlots: async (serviceId: number): Promise<TimeSlot[]> => {
-    const response = await api.get<TimeSlot[]>(`/services/${serviceId}/slots`)
+  getAvailableSlots: async (serviceId: number, startDate?: string, endDate?: string): Promise<TimeSlot[]> => {
+    const params = new URLSearchParams()
+    if (startDate) params.append('start_date', startDate)
+    if (endDate) params.append('end_date', endDate)
+    const queryString = params.toString()
+    const response = await api.get<TimeSlot[]>(`/services/${serviceId}/slots${queryString ? '?' + queryString : ''}`)
     return response.data
   },
 
@@ -91,6 +95,20 @@ export const masterAPI = {
     return response.data
   },
 
+  updateService: async (serviceId: number, data: {
+    name?: string
+    description?: string
+    duration?: number
+    price?: number
+  }): Promise<Service> => {
+    const response = await api.put<Service>(`/master/services/${serviceId}`, data)
+    return response.data
+  },
+
+  deleteService: async (serviceId: number): Promise<void> => {
+    await api.delete(`/master/services/${serviceId}`)
+  },
+
   getServices: async (): Promise<Service[]> => {
     const response = await api.get<Service[]>('/master/services')
     return response.data
@@ -109,6 +127,78 @@ export const masterAPI = {
   rejectAppointment: async (appointmentId: number): Promise<Appointment> => {
     const response = await api.put<Appointment>(`/master/appointments/${appointmentId}/reject`)
     return response.data
+  },
+
+  // Time slot management
+  createTimeSlot: async (data: {
+    service_id: number
+    start_time: string
+    end_time: string
+  }): Promise<TimeSlot> => {
+    const response = await api.post<TimeSlot>('/master/time-slots', data)
+    return response.data
+  },
+
+  getTimeSlots: async (params?: {
+    service_id?: number
+    start_date?: string
+    end_date?: string
+    is_booked?: boolean
+  }): Promise<TimeSlot[]> => {
+    const queryParams = new URLSearchParams()
+    if (params?.service_id) queryParams.append('service_id', params.service_id.toString())
+    if (params?.start_date) queryParams.append('start_date', params.start_date)
+    if (params?.end_date) queryParams.append('end_date', params.end_date)
+    if (params?.is_booked !== undefined) queryParams.append('is_booked', params.is_booked.toString())
+    
+    const response = await api.get<TimeSlot[]>(`/master/time-slots?${queryParams.toString()}`)
+    return response.data
+  },
+
+  updateTimeSlot: async (timeSlotId: number, data: {
+    start_time?: string
+    end_time?: string
+  }): Promise<TimeSlot> => {
+    const response = await api.put<TimeSlot>(`/master/time-slots/${timeSlotId}`, data)
+    return response.data
+  },
+
+  deleteTimeSlot: async (timeSlotId: number): Promise<void> => {
+    await api.delete(`/master/time-slots/${timeSlotId}`)
+  },
+
+  toggleTimeSlotBooking: async (data: {
+    timeSlotId?: number
+    service_id: number
+    start_time: string
+    end_time: string
+    is_booked: boolean
+  }): Promise<TimeSlot> => {
+    const url = data.timeSlotId 
+      ? `/master/time-slots/${data.timeSlotId}/toggle-booking`
+      : '/master/time-slots/0/toggle-booking'
+    const response = await api.put<TimeSlot>(url, {
+      service_id: data.service_id,
+      start_time: data.start_time,
+      end_time: data.end_time,
+      is_booked: data.is_booked,
+    })
+    return response.data
+  },
+
+  // Service options (sub-categories)
+  createServiceOption: async (serviceId: number, data: {
+    name: string
+    description?: string
+    duration: number
+    price: number
+  }): Promise<ServiceOption> => {
+    const response = await api.post<ServiceOption>(`/master/services/${serviceId}/options`, data)
+    return response.data
+  },
+
+  deleteServiceOption: async (optionId: number): Promise<void> => {
+    await api.delete(`/master/service-options/${optionId}`)
   },
 }
 
