@@ -28,6 +28,7 @@ export interface Service {
   duration: number
   price: number
   master?: MasterProfile
+  options?: ServiceOption[]
 }
 
 export type AppointmentStatus = 'pending' | 'confirmed' | 'rejected' | 'cancelled'
@@ -47,10 +48,24 @@ export interface Appointment {
 }
 
 export interface TimeSlot {
-  service_id: string
+  id?: number
+  master_id: number
+  service_id: number
   start_time: string
   end_time: string
-  available: boolean
+  is_booked: boolean
+  available?: boolean // Computed field for display
+  service?: Service
+  master?: MasterProfile
+}
+
+export interface ServiceOption {
+  id: number
+  service_id: number
+  name: string
+  description?: string
+  duration: number
+  price: number
 }
 
 export interface AuthResponse {

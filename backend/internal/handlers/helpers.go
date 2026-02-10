@@ -3,9 +3,26 @@ package handlers
 import (
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
+
+// getContextUserID returns the authenticated user's ID from context.
+// If missing or invalid, writes 401 and returns (0, false).
+func getContextUserID(w http.ResponseWriter, r *http.Request) (uint, bool) {
+	v := r.Context().Value("user_id")
+	if v == nil {
+		respondWithError(w, http.StatusUnauthorized, "Authorization required")
+		return 0, false
+	}
+	userID, ok := v.(uint)
+	if !ok {
+		respondWithError(w, http.StatusUnauthorized, "Invalid auth context")
+		return 0, false
+	}
+	return userID, true
+}
 
 // getPathValue extracts a path parameter from the URL
 // For Go 1.21 compatibility (PathValue is only in Go 1.22+)
@@ -16,16 +33,39 @@ func getPathValue(r *http.Request, key string) string {
 
 	// For routes like /api/services/{id}/slots, find "services" and return next part
 	// For routes like /api/master/appointments/{id}/confirm, find "appointments" and return next part
+	// For routes like /api/master/time-slots/{id}, find "time-slots" and return next part
 	if key == "id" {
 		// Look for common patterns
 		for i, part := range parts {
-			if (part == "services" || part == "appointments") && i+1 < len(parts) {
+			if (part == "services" || part == "service-options" || part == "appointments" || part == "time-slots") && i+1 < len(parts) {
 				return parts[i+1]
 			}
 		}
 	}
 
 	return ""
+}
+
+// getIDParam returns the numeric ID from the request path.
+// It first tries Go 1.22's r.PathValue("id") for mux patterns like
+// "DELETE /api/master/services/{id}", and falls back to getPathValue
+// for older-style/manual patterns.
+func getIDParam(r *http.Request) (uint, error) {
+	idStr := r.PathValue("id")
+	if idStr == "" {
+		idStr = getPathValue(r, "id")
+	}
+
+	if idStr == "" {
+		return 0, errors.New("id not found in path")
+	}
+
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		return 0, err
+	}
+
+	return uint(id), nil
 }
 
 func parseTime(timeStr string) (time.Time, error) {

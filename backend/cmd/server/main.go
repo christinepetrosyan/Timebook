@@ -54,9 +54,22 @@ func main() {
 	mux.HandleFunc("GET /api/master/profile", authMiddleware(masterMiddleware(http.HandlerFunc(h.GetMasterProfile))).ServeHTTP)
 	mux.HandleFunc("POST /api/master/services", authMiddleware(masterMiddleware(http.HandlerFunc(h.CreateService))).ServeHTTP)
 	mux.HandleFunc("GET /api/master/services", authMiddleware(masterMiddleware(http.HandlerFunc(h.GetMasterServices))).ServeHTTP)
+	mux.HandleFunc("PUT /api/master/services/{id}", authMiddleware(masterMiddleware(http.HandlerFunc(h.UpdateService))).ServeHTTP)
+	mux.HandleFunc("DELETE /api/master/services/{id}", authMiddleware(masterMiddleware(http.HandlerFunc(h.DeleteService))).ServeHTTP)
 	mux.HandleFunc("GET /api/master/appointments", authMiddleware(masterMiddleware(http.HandlerFunc(h.GetMasterAppointments))).ServeHTTP)
 	mux.HandleFunc("PUT /api/master/appointments/{id}/confirm", authMiddleware(masterMiddleware(http.HandlerFunc(h.ConfirmAppointment))).ServeHTTP)
 	mux.HandleFunc("PUT /api/master/appointments/{id}/reject", authMiddleware(masterMiddleware(http.HandlerFunc(h.RejectAppointment))).ServeHTTP)
+
+	// Master time slot routes (protected)
+	mux.HandleFunc("POST /api/master/time-slots", authMiddleware(masterMiddleware(http.HandlerFunc(h.CreateTimeSlot))).ServeHTTP)
+	mux.HandleFunc("GET /api/master/time-slots", authMiddleware(masterMiddleware(http.HandlerFunc(h.GetTimeSlots))).ServeHTTP)
+	mux.HandleFunc("PUT /api/master/time-slots/{id}", authMiddleware(masterMiddleware(http.HandlerFunc(h.UpdateTimeSlot))).ServeHTTP)
+	mux.HandleFunc("PUT /api/master/time-slots/{id}/toggle-booking", authMiddleware(masterMiddleware(http.HandlerFunc(h.ToggleTimeSlotBooking))).ServeHTTP)
+	mux.HandleFunc("DELETE /api/master/time-slots/{id}", authMiddleware(masterMiddleware(http.HandlerFunc(h.DeleteTimeSlot))).ServeHTTP)
+
+	// Master service options (sub-categories) routes (protected)
+	mux.HandleFunc("POST /api/master/services/{id}/options", authMiddleware(masterMiddleware(http.HandlerFunc(h.CreateServiceOption))).ServeHTTP)
+	mux.HandleFunc("DELETE /api/master/service-options/{id}", authMiddleware(masterMiddleware(http.HandlerFunc(h.DeleteServiceOption))).ServeHTTP)
 
 	// Admin routes (protected)
 	mux.HandleFunc("GET /api/admin/masters", authMiddleware(adminMiddleware(http.HandlerFunc(h.GetMasters))).ServeHTTP)

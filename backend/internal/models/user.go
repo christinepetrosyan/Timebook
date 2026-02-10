@@ -39,13 +39,13 @@ type MasterProfile struct {
 	UpdatedAt time.Time      `json:"updated_at"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
 
-	UserID      uint   `gorm:"uniqueIndex;not null" json:"user_id"`
-	Bio         string `gorm:"type:text" json:"bio"`
-	Specialty   string `json:"specialty"`
-	Experience  int    `json:"experience"` // years of experience
+	UserID     uint   `gorm:"uniqueIndex;not null" json:"user_id"`
+	User       User   `gorm:"foreignKey:UserID" json:"user"`
+	Bio        string `gorm:"type:text" json:"bio"`
+	Specialty  string `json:"specialty"`
+	Experience int    `json:"experience"` // years of experience
 
 	// Relations
-	Services    []Service    `gorm:"foreignKey:MasterID" json:"services,omitempty"`
+	Services     []Service     `gorm:"foreignKey:MasterID" json:"services,omitempty"`
 	Appointments []Appointment `gorm:"foreignKey:MasterID" json:"appointments,omitempty"`
 }
-

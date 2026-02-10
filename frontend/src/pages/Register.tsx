@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 
 export default function Register() {
@@ -48,6 +48,11 @@ export default function Register() {
         }}
       >
         <h2 style={{ marginBottom: '1.5rem', textAlign: 'center' }}>Register for Timebook</h2>
+        <p style={{ marginBottom: '1rem', textAlign: 'center' }}>
+          <Link to="/" style={{ color: '#3498db', fontSize: '0.9rem' }}>
+            Back to home
+          </Link>
+        </p>
         {error && (
           <div
             style={{
