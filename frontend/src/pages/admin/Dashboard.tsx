@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { adminAPI } from '../../services/api'
+import { useState, useEffect, useCallback } from 'react'
+import { adminAPI, getApiErrorMessage } from '../../services/api'
 import type { MasterProfile, Appointment } from '../../types'
 
 export default function AdminDashboard() {
@@ -9,11 +9,7 @@ export default function AdminDashboard() {
   const [statusFilter, setStatusFilter] = useState<string>('')
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    loadData()
-  }, [selectedMaster, statusFilter])
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       const [mastersData, appointmentsData] = await Promise.all([
         adminAPI.getMasters(),
@@ -26,7 +22,11 @@ export default function AdminDashboard() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [selectedMaster, statusFilter])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData])
 
   if (loading) {
     return <div>Loading...</div>
@@ -110,8 +110,8 @@ function AdminAppointmentCard({ appointment, onUpdate }: { appointment: Appointm
     try {
       await adminAPI.confirmAppointment(appointment.id)
       onUpdate()
-    } catch (error: any) {
-      alert(error.response?.data?.error || 'Failed to confirm appointment')
+    } catch (error: unknown) {
+      alert(getApiErrorMessage(error, 'Failed to confirm appointment'))
     } finally {
       setLoading(false)
     }
@@ -122,8 +122,8 @@ function AdminAppointmentCard({ appointment, onUpdate }: { appointment: Appointm
     try {
       await adminAPI.rejectAppointment(appointment.id)
       onUpdate()
-    } catch (error: any) {
-      alert(error.response?.data?.error || 'Failed to reject appointment')
+    } catch (error: unknown) {
+      alert(getApiErrorMessage(error, 'Failed to reject appointment'))
     } finally {
       setLoading(false)
     }

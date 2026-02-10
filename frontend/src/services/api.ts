@@ -20,6 +20,15 @@ api.interceptors.request.use((config) => {
   return config
 })
 
+/** Safely get error message from Axios-style or unknown error. */
+export function getApiErrorMessage(error: unknown, fallback: string): string {
+  if (error && typeof error === 'object' && 'response' in error) {
+    const response = (error as { response?: { data?: { error?: string } } }).response
+    if (response?.data?.error && typeof response.data.error === 'string') return response.data.error
+  }
+  return fallback
+}
+
 // Auth API
 export const authAPI = {
   register: async (data: {

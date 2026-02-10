@@ -1,5 +1,5 @@
 import { ReactNode, useState, useRef, useEffect } from 'react'
-import { useAuth } from '../contexts/AuthContext'
+import { useAuth } from '../contexts/useAuth'
 import { useNavigate } from 'react-router-dom'
 
 interface LayoutProps {

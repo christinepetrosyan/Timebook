@@ -1,23 +1,7 @@
-import { createContext, useContext, useState, ReactNode } from 'react'
+import { useState, ReactNode } from 'react'
 import { authAPI } from '../services/api'
 import type { User } from '../types'
-
-interface AuthContextType {
-  user: User | null
-  token: string | null
-  login: (email: string, password: string) => Promise<void>
-  register: (data: {
-    email: string
-    password: string
-    name: string
-    phone?: string
-    role?: string
-  }) => Promise<void>
-  logout: () => void
-  isAuthenticated: boolean
-}
-
-const AuthContext = createContext<AuthContextType | undefined>(undefined)
+import { AuthContext } from './authContext'
 
 function getStoredUser(): User | null {
   try {
@@ -80,12 +64,3 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     </AuthContext.Provider>
   )
 }
-
-export function useAuth() {
-  const context = useContext(AuthContext)
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider')
-  }
-  return context
-}
-
