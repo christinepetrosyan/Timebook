@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { useAuth } from '../contexts/AuthContext'
+import { useAuth } from '../contexts/useAuth'
+import { getApiErrorMessage } from '../services/api'
 
 export default function Register() {
   const [formData, setFormData] = useState({
@@ -21,8 +22,8 @@ export default function Register() {
     try {
       await register(formData)
       navigate(`/${formData.role}/dashboard`)
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Registration failed')
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err, 'Registration failed'))
     }
   }
 

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { masterAPI } from '../../services/api'
+import { masterAPI, getApiErrorMessage } from '../../services/api'
 import type { Service, Appointment } from '../../types'
 
 export default function MasterDashboard() {
@@ -101,8 +101,8 @@ function ServiceForm({ onSuccess }: { onSuccess: () => void }) {
     try {
       await masterAPI.createService(formData)
       onSuccess()
-    } catch (error: any) {
-      alert(error.response?.data?.error || 'Failed to create service')
+    } catch (error: unknown) {
+      alert(getApiErrorMessage(error, 'Failed to create service'))
     } finally {
       setLoading(false)
     }
@@ -209,8 +209,8 @@ function AppointmentRequestCard({ appointment, onUpdate }: { appointment: Appoin
     try {
       await masterAPI.confirmAppointment(appointment.id)
       onUpdate()
-    } catch (error: any) {
-      alert(error.response?.data?.error || 'Failed to confirm appointment')
+    } catch (error: unknown) {
+      alert(getApiErrorMessage(error, 'Failed to confirm appointment'))
     } finally {
       setLoading(false)
     }
@@ -221,8 +221,8 @@ function AppointmentRequestCard({ appointment, onUpdate }: { appointment: Appoin
     try {
       await masterAPI.rejectAppointment(appointment.id)
       onUpdate()
-    } catch (error: any) {
-      alert(error.response?.data?.error || 'Failed to reject appointment')
+    } catch (error: unknown) {
+      alert(getApiErrorMessage(error, 'Failed to reject appointment'))
     } finally {
       setLoading(false)
     }
