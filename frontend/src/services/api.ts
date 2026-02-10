@@ -1,5 +1,5 @@
 import axios from 'axios'
-import type { AuthResponse, User, Service, Appointment, TimeSlot, MasterProfile } from '../types'
+import type { AuthResponse, User, Service, Appointment, TimeSlot, MasterProfile, ServiceOption } from '../types'
 
 // Use relative URL in production (via nginx proxy) or absolute URL in development
 const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:8080/api')
