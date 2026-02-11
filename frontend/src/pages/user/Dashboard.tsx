@@ -1,7 +1,7 @@
 // React hooks for managing component state and side effects
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 // API layer for user-related backend requests
-import { userAPI, getApiErrorMessage } from '../../services/api'
+import { userAPI } from '../../services/api'
 // Shared TypeScript types
 import type { Service, Appointment, TimeSlot, ServiceOption } from '../../types'
 
@@ -16,28 +16,29 @@ export default function UserDashboard() {
   // Global loading flag
   const [loading, setLoading] = useState(true)
 
-  // Fetch services and appointments concurrently (intentionally stable for mount-only run)
-  const loadData = useCallback(async () => {
+  // Load initial data on component mount
+  useEffect(() => {
+    loadData()
+  }, [])
+
+  // Fetch services and appointments concurrently
+  const loadData = async () => {
     try {
       const [servicesData, appointmentsData] = await Promise.all([
         userAPI.getServices(),
         userAPI.getAppointments(),
       ])
+      // Update state with fetched data
       setServices(filterServices(servicesData, search))
       setAppointments(appointmentsData)
     } catch (error) {
+      // Log data loading errors
       console.error('Failed to load data:', error)
     } finally {
+      // Stop loading indicator
       setLoading(false)
     }
-    // search omitted: initial load only; Search button triggers handleSearch for query changes
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  // Load initial data on component mount
-  useEffect(() => {
-    loadData()
-  }, [loadData])
+  }
 
   // Trigger service search based on current query
   const handleSearch = async () => {
@@ -160,9 +161,16 @@ function ServiceCard({ service, onBookingSuccess }: { service: Service; onBookin
   const [loadingSlots, setLoadingSlots] = useState(false)
   const [loadingBooking, setLoadingBooking] = useState(false)
 
-  const fetchTimeSlots = useCallback(async () => {
-    if (!selectedDate) return
+  // Fetch time slots when date is selected
+  useEffect(() => {
+    if (selectedDate && showBooking) {
+      fetchTimeSlots()
+    }
+  }, [selectedDate, showBooking, service.id])
 
+  const fetchTimeSlots = async () => {
+    if (!selectedDate) return
+    
     setLoadingSlots(true)
     try {
       // Format date for API (start and end of selected day)
@@ -170,28 +178,28 @@ function ServiceCard({ service, onBookingSuccess }: { service: Service; onBookin
       startOfDay.setHours(0, 0, 0, 0)
       const endOfDay = new Date(selectedDate)
       endOfDay.setHours(23, 59, 59, 999)
-
+      
       // Convert to ISO string for API
       const startDateStr = startOfDay.toISOString()
       const endDateStr = endOfDay.toISOString()
-
+      
       console.log('Fetching slots for service:', service.id, 'from', startDateStr, 'to', endDateStr)
-
+      
       const slots = await userAPI.getAvailableSlots(service.id, startDateStr, endDateStr)
-
+      
       console.log('Received slots:', slots)
-
+      
       // Filter slots to only show those that fall within the selected day
       const daySlots = slots.filter(slot => {
         const slotDate = new Date(slot.start_time)
         return slotDate >= startOfDay && slotDate <= endOfDay
       })
-
+      
       // Sort slots by time
-      const sortedSlots = daySlots.sort((a, b) =>
+      const sortedSlots = daySlots.sort((a, b) => 
         new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
       )
-
+      
       console.log('Filtered and sorted slots:', sortedSlots)
       setTimeSlots(sortedSlots)
     } catch (error) {
@@ -200,14 +208,7 @@ function ServiceCard({ service, onBookingSuccess }: { service: Service; onBookin
     } finally {
       setLoadingSlots(false)
     }
-  }, [selectedDate, service.id])
-
-  // Fetch time slots when date is selected
-  useEffect(() => {
-    if (selectedDate && showBooking) {
-      fetchTimeSlots()
-    }
-  }, [selectedDate, showBooking, fetchTimeSlots])
+  }
 
   // Submit appointment booking request
   const handleBook = async () => {
@@ -229,8 +230,9 @@ function ServiceCard({ service, onBookingSuccess }: { service: Service; onBookin
       setNotes('')
       // Refresh data without reloading page
       onBookingSuccess()
-    } catch (error: unknown) {
-      alert(getApiErrorMessage(error, 'Failed to book appointment'))
+    } catch (error: any) {
+      // Display API error message if available
+      alert(error.response?.data?.error || 'Failed to book appointment')
     } finally {
       // Stop loading indicator
       setLoadingBooking(false)
