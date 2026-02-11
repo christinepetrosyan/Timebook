@@ -2,12 +2,15 @@ import { useState, useEffect } from 'react'
 import { masterAPI, getApiErrorMessage } from '../../services/api'
 import type { Service, Appointment, TimeSlot, ServiceOption } from '../../types'
 
+type TabType = 'services' | 'calendar' | 'requests'
+
 export default function MasterDashboard() {
   const [services, setServices] = useState<Service[]>([])
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [showServiceForm, setShowServiceForm] = useState(false)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<TabType>('services')
 
   useEffect(() => {
     loadData()
@@ -40,6 +43,12 @@ export default function MasterDashboard() {
     return <div>Loading...</div>
   }
 
+  const tabs: Array<{ id: TabType; label: string }> = [
+    { id: 'services', label: 'My Services' },
+    { id: 'calendar', label: 'My Calendar' },
+    { id: 'requests', label: 'Appointment Requests' },
+  ]
+
   return (
     <div>
       <h2>Master Dashboard</h2>
@@ -48,54 +57,101 @@ export default function MasterDashboard() {
           {loadError}
         </div>
       )}
-      <div style={{ marginBottom: '2rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-          <h3>My Services</h3>
+
+      {/* Tab Navigation */}
+      <div style={{ 
+        display: 'flex', 
+        gap: '0.5rem', 
+        borderBottom: '2px solid #ddd',
+        marginBottom: '1.5rem',
+      }}>
+        {tabs.map((tab) => (
           <button
-            onClick={() => setShowServiceForm(!showServiceForm)}
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
             style={{
               padding: '0.75rem 1.5rem',
-              backgroundColor: '#3498db',
-              color: 'white',
+              backgroundColor: activeTab === tab.id ? '#3498db' : 'transparent',
+              color: activeTab === tab.id ? 'white' : '#555',
               border: 'none',
-              borderRadius: '4px',
+              borderBottom: activeTab === tab.id ? '2px solid #3498db' : '2px solid transparent',
+              marginBottom: '-2px',
               cursor: 'pointer',
+              fontSize: '1rem',
+              fontWeight: activeTab === tab.id ? '600' : '400',
+              transition: 'all 0.2s ease',
+            }}
+            onMouseEnter={(e) => {
+              if (activeTab !== tab.id) {
+                e.currentTarget.style.backgroundColor = '#f0f0f0'
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (activeTab !== tab.id) {
+                e.currentTarget.style.backgroundColor = 'transparent'
+              }
             }}
           >
-            {showServiceForm ? 'Cancel' : 'Add Service'}
+            {tab.label}
           </button>
-        </div>
-        {showServiceForm && <ServiceForm onSuccess={() => {
-          setShowServiceForm(false)
-          loadData()
-        }} />}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '1rem' }}>
-          {services.map((service) => (
-            <ServiceCard key={service.id} service={service} onChange={loadData} />
-          ))}
-        </div>
+        ))}
       </div>
-      
-      <div style={{ marginBottom: '2rem' }}>
-        <h3>My Calendar</h3>
-        <p style={{ color: '#666', marginBottom: '1rem', fontSize: '0.9rem' }}>
-          View all your appointments and manage availability. Click on time slots to mark them as booked (for lunch, phone appointments, etc.) or available.
-        </p>
-        {services.length === 0 ? (
-          <p style={{ color: '#666' }}>Create a service first to see your calendar</p>
-        ) : (
-          <MasterCalendar services={services} appointments={appointments} onUpdate={loadData} />
-        )}
-      </div>
-      
-      <div>
-        <h3>Appointment Requests</h3>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {appointments.map((appointment) => (
-            <AppointmentRequestCard key={appointment.id} appointment={appointment} onUpdate={loadData} />
-          ))}
+
+      {/* Tab Content */}
+      {activeTab === 'services' && (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <h3>My Services</h3>
+            <button
+              onClick={() => setShowServiceForm(!showServiceForm)}
+              style={{
+                padding: '0.75rem 1.5rem',
+                backgroundColor: '#3498db',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+              }}
+            >
+              {showServiceForm ? 'Cancel' : 'Add Service'}
+            </button>
+          </div>
+          {showServiceForm && <ServiceForm onSuccess={() => {
+            setShowServiceForm(false)
+            loadData()
+          }} />}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '1rem' }}>
+            {services.map((service) => (
+              <ServiceCard key={service.id} service={service} onChange={loadData} />
+            ))}
+          </div>
         </div>
-      </div>
+      )}
+
+      {activeTab === 'calendar' && (
+        <div>
+          <h3>My Calendar</h3>
+          <p style={{ color: '#666', marginBottom: '1rem', fontSize: '0.9rem' }}>
+            View all your appointments and manage availability. Click on time slots to mark them as booked (for lunch, phone appointments, etc.) or available.
+          </p>
+          {services.length === 0 ? (
+            <p style={{ color: '#666' }}>Create a service first to see your calendar</p>
+          ) : (
+            <MasterCalendar services={services} appointments={appointments} onUpdate={loadData} />
+          )}
+        </div>
+      )}
+
+      {activeTab === 'requests' && (
+        <div>
+          <h3>Appointment Requests</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            {appointments.map((appointment) => (
+              <AppointmentRequestCard key={appointment.id} appointment={appointment} onUpdate={loadData} />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -1359,6 +1415,7 @@ function MasterCalendar({
           gridTemplateColumns: 'repeat(7, 1fr)', 
           gap: '0.5rem',
           maxHeight: '200px',
+          maxWidth: '250px',
           overflowY: 'auto',
           padding: '0.5rem',
           border: '1px solid #ddd',
