@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { masterAPI, getApiErrorMessage } from '../../services/api'
 import type { Service, Appointment, TimeSlot, ServiceOption } from '../../types'
+import Calendar from '../../components/Calendar'
 
 type TabType = 'services' | 'calendar' | 'requests'
 
@@ -1372,20 +1373,6 @@ function MasterCalendar({
     }
   }
 
-  const generateCalendarDays = () => {
-    const days: Date[] = []
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    
-    for (let i = 0; i < 30; i++) {
-      const date = new Date(today)
-      date.setDate(today.getDate() + i)
-      days.push(date)
-    }
-    
-    return days
-  }
-
   const formatDate = (date: Date) => {
     return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
   }
@@ -1393,11 +1380,6 @@ function MasterCalendar({
   const formatTime = (timeString: string) => {
     const date = new Date(timeString)
     return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
-  }
-
-  const isToday = (date: Date) => {
-    const today = new Date()
-    return date.toDateString() === today.toDateString()
   }
 
   return (
@@ -1410,44 +1392,10 @@ function MasterCalendar({
       {/* Calendar */}
       <div style={{ marginBottom: '1rem' }}>
         <h4 style={{ marginBottom: '0.5rem' }}>Select Date</h4>
-        <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'repeat(7, 1fr)', 
-          gap: '0.5rem',
-          maxHeight: '200px',
-          maxWidth: '250px',
-          overflowY: 'auto',
-          padding: '0.5rem',
-          border: '1px solid #ddd',
-          borderRadius: '4px',
-        }}>
-          {generateCalendarDays().map((date, index) => (
-            <button
-              key={index}
-              onClick={() => setSelectedDate(date)}
-              style={{
-                padding: '0.5rem',
-                border: selectedDate?.toDateString() === date.toDateString() 
-                  ? '2px solid #3498db' 
-                  : '1px solid #ddd',
-                borderRadius: '4px',
-                backgroundColor: selectedDate?.toDateString() === date.toDateString()
-                  ? '#e3f2fd'
-                  : isToday(date)
-                  ? '#fff9c4'
-                  : 'white',
-                cursor: 'pointer',
-                fontSize: '0.75rem',
-                fontWeight: isToday(date) ? 'bold' : 'normal',
-              }}
-            >
-              <div>{date.getDate()}</div>
-              <div style={{ fontSize: '0.65rem', marginTop: '0.25rem' }}>
-                {date.toLocaleDateString('en-US', { weekday: 'short' })}
-              </div>
-            </button>
-          ))}
-        </div>
+        <Calendar
+          selectedDate={selectedDate}
+          onDateSelect={(date) => setSelectedDate(date)}
+        />
       </div>
 
       {/* Time Slots */}
