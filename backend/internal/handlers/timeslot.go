@@ -56,33 +56,31 @@ func (h *Handlers) CreateTimeSlot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check for overlapping slots
+	// Check for overlapping slots across ALL services (master has one unified calendar)
 	var existingSlot models.TimeSlot
 	if err := h.DB.Where(
-		"master_id = ? AND service_id = ? AND deleted_at IS NULL AND ((start_time <= ? AND end_time > ?) OR (start_time < ? AND end_time >= ?) OR (start_time >= ? AND end_time <= ?))",
+		"master_id = ? AND deleted_at IS NULL AND ((start_time <= ? AND end_time > ?) OR (start_time < ? AND end_time >= ?) OR (start_time >= ? AND end_time <= ?))",
 		masterProfile.ID,
-		req.ServiceID,
 		startTime, startTime,
 		endTime, endTime,
 		startTime, endTime,
 	).First(&existingSlot).Error; err == nil {
-		respondWithError(w, http.StatusConflict, "Time slot overlaps with existing slot")
+		respondWithError(w, http.StatusConflict, "Time slot overlaps with existing slot in your calendar")
 		return
 	}
 
-	// Check for overlapping appointments
+	// Check for overlapping appointments across ALL services
 	var existingAppointment models.Appointment
 	if err := h.DB.Where(
-		"master_id = ? AND service_id = ? AND deleted_at IS NULL AND status IN (?, ?) AND ((start_time <= ? AND end_time > ?) OR (start_time < ? AND end_time >= ?) OR (start_time >= ? AND end_time <= ?))",
+		"master_id = ? AND deleted_at IS NULL AND status IN (?, ?) AND ((start_time <= ? AND end_time > ?) OR (start_time < ? AND end_time >= ?) OR (start_time >= ? AND end_time <= ?))",
 		masterProfile.ID,
-		req.ServiceID,
 		models.StatusPending,
 		models.StatusConfirmed,
 		startTime, startTime,
 		endTime, endTime,
 		startTime, endTime,
 	).First(&existingAppointment).Error; err == nil {
-		respondWithError(w, http.StatusConflict, "Time slot overlaps with existing appointment")
+		respondWithError(w, http.StatusConflict, "Time slot overlaps with existing appointment in your calendar")
 		return
 	}
 
@@ -228,18 +226,17 @@ func (h *Handlers) UpdateTimeSlot(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check for overlapping slots (excluding current slot)
+	// Check for overlapping slots across ALL services (excluding current slot)
 	var existingSlot models.TimeSlot
 	if err := h.DB.Where(
-		"id != ? AND master_id = ? AND service_id = ? AND deleted_at IS NULL AND ((start_time <= ? AND end_time > ?) OR (start_time < ? AND end_time >= ?) OR (start_time >= ? AND end_time <= ?))",
+		"id != ? AND master_id = ? AND deleted_at IS NULL AND ((start_time <= ? AND end_time > ?) OR (start_time < ? AND end_time >= ?) OR (start_time >= ? AND end_time <= ?))",
 		timeSlotID,
 		masterProfile.ID,
-		timeSlot.ServiceID,
 		startTime, startTime,
 		endTime, endTime,
 		startTime, endTime,
 	).First(&existingSlot).Error; err == nil {
-		respondWithError(w, http.StatusConflict, "Time slot overlaps with existing slot")
+		respondWithError(w, http.StatusConflict, "Time slot overlaps with existing slot in your calendar")
 		return
 	}
 

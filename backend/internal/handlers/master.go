@@ -338,7 +338,16 @@ func (h *Handlers) ConfirmAppointment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Mark corresponding time slot as booked (create if doesn't exist)
+	// Mark ALL time slots at this time as booked (master has one unified calendar)
+	// This prevents double-booking across different services
+	h.DB.Model(&models.TimeSlot{}).Where(
+		"master_id = ? AND start_time = ? AND end_time = ?",
+		appointment.MasterID,
+		appointment.StartTime,
+		appointment.EndTime,
+	).Update("is_booked", true)
+
+	// If no slot exists for this service/time, create one
 	var timeSlot models.TimeSlot
 	if err := h.DB.Where(
 		"master_id = ? AND service_id = ? AND start_time = ? AND end_time = ?",
@@ -347,7 +356,6 @@ func (h *Handlers) ConfirmAppointment(w http.ResponseWriter, r *http.Request) {
 		appointment.StartTime,
 		appointment.EndTime,
 	).First(&timeSlot).Error; err != nil {
-		// Time slot doesn't exist, create it as booked
 		timeSlot = models.TimeSlot{
 			MasterID:  appointment.MasterID,
 			ServiceID: appointment.ServiceID,
@@ -356,10 +364,6 @@ func (h *Handlers) ConfirmAppointment(w http.ResponseWriter, r *http.Request) {
 			IsBooked:  true,
 		}
 		h.DB.Create(&timeSlot)
-	} else {
-		// Time slot exists, mark it as booked
-		timeSlot.IsBooked = true
-		h.DB.Save(&timeSlot)
 	}
 
 	h.DB.Preload("User").Preload("Service").First(&appointment, appointment.ID)
