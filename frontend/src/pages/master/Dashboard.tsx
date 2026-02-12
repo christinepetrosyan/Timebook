@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react'
 import { masterAPI, getApiErrorMessage } from '../../services/api'
 import type { Service, Appointment, TimeSlot, ServiceOption } from '../../types'
+import Calendar from '../../components/Calendar'
+
+type TabType = 'services' | 'calendar' | 'requests'
 
 export default function MasterDashboard() {
   const [services, setServices] = useState<Service[]>([])
@@ -8,6 +11,7 @@ export default function MasterDashboard() {
   const [showServiceForm, setShowServiceForm] = useState(false)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<TabType>('services')
 
   useEffect(() => {
     loadData()
@@ -40,6 +44,12 @@ export default function MasterDashboard() {
     return <div>Loading...</div>
   }
 
+  const tabs: Array<{ id: TabType; label: string }> = [
+    { id: 'services', label: 'My Services' },
+    { id: 'calendar', label: 'My Calendar' },
+    { id: 'requests', label: 'Appointment Requests' },
+  ]
+
   return (
     <div>
       <h2>Master Dashboard</h2>
@@ -48,54 +58,101 @@ export default function MasterDashboard() {
           {loadError}
         </div>
       )}
-      <div style={{ marginBottom: '2rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-          <h3>My Services</h3>
+
+      {/* Tab Navigation */}
+      <div style={{ 
+        display: 'flex', 
+        gap: '0.5rem', 
+        borderBottom: '2px solid #ddd',
+        marginBottom: '1.5rem',
+      }}>
+        {tabs.map((tab) => (
           <button
-            onClick={() => setShowServiceForm(!showServiceForm)}
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
             style={{
               padding: '0.75rem 1.5rem',
-              backgroundColor: '#3498db',
-              color: 'white',
+              backgroundColor: activeTab === tab.id ? '#3498db' : 'transparent',
+              color: activeTab === tab.id ? 'white' : '#555',
               border: 'none',
-              borderRadius: '4px',
+              borderBottom: activeTab === tab.id ? '2px solid #3498db' : '2px solid transparent',
+              marginBottom: '-2px',
               cursor: 'pointer',
+              fontSize: '1rem',
+              fontWeight: activeTab === tab.id ? '600' : '400',
+              transition: 'all 0.2s ease',
+            }}
+            onMouseEnter={(e) => {
+              if (activeTab !== tab.id) {
+                e.currentTarget.style.backgroundColor = '#f0f0f0'
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (activeTab !== tab.id) {
+                e.currentTarget.style.backgroundColor = 'transparent'
+              }
             }}
           >
-            {showServiceForm ? 'Cancel' : 'Add Service'}
+            {tab.label}
           </button>
-        </div>
-        {showServiceForm && <ServiceForm onSuccess={() => {
-          setShowServiceForm(false)
-          loadData()
-        }} />}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '1rem' }}>
-          {services.map((service) => (
-            <ServiceCard key={service.id} service={service} onChange={loadData} />
-          ))}
-        </div>
+        ))}
       </div>
-      
-      <div style={{ marginBottom: '2rem' }}>
-        <h3>My Calendar</h3>
-        <p style={{ color: '#666', marginBottom: '1rem', fontSize: '0.9rem' }}>
-          View all your appointments and manage availability. Click on time slots to mark them as booked (for lunch, phone appointments, etc.) or available.
-        </p>
-        {services.length === 0 ? (
-          <p style={{ color: '#666' }}>Create a service first to see your calendar</p>
-        ) : (
-          <MasterCalendar services={services} appointments={appointments} onUpdate={loadData} />
-        )}
-      </div>
-      
-      <div>
-        <h3>Appointment Requests</h3>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {appointments.map((appointment) => (
-            <AppointmentRequestCard key={appointment.id} appointment={appointment} onUpdate={loadData} />
-          ))}
+
+      {/* Tab Content */}
+      {activeTab === 'services' && (
+        <div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <h3>My Services</h3>
+            <button
+              onClick={() => setShowServiceForm(!showServiceForm)}
+              style={{
+                padding: '0.75rem 1.5rem',
+                backgroundColor: '#3498db',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+              }}
+            >
+              {showServiceForm ? 'Cancel' : 'Add Service'}
+            </button>
+          </div>
+          {showServiceForm && <ServiceForm onSuccess={() => {
+            setShowServiceForm(false)
+            loadData()
+          }} />}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '1rem' }}>
+            {services.map((service) => (
+              <ServiceCard key={service.id} service={service} onChange={loadData} />
+            ))}
+          </div>
         </div>
-      </div>
+      )}
+
+      {activeTab === 'calendar' && (
+        <div>
+          <h3>My Calendar</h3>
+          <p style={{ color: '#666', marginBottom: '1rem', fontSize: '0.9rem' }}>
+            View all your appointments and manage availability. Click on time slots to mark them as booked (for lunch, phone appointments, etc.) or available.
+          </p>
+          {services.length === 0 ? (
+            <p style={{ color: '#666' }}>Create a service first to see your calendar</p>
+          ) : (
+            <MasterCalendar services={services} appointments={appointments} onUpdate={loadData} />
+          )}
+        </div>
+      )}
+
+      {activeTab === 'requests' && (
+        <div>
+          <h3>Appointment Requests</h3>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            {appointments.map((appointment) => (
+              <AppointmentRequestCard key={appointment.id} appointment={appointment} onUpdate={loadData} />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -1197,7 +1254,20 @@ export function _TimeSlotCard({ timeSlot, onUpdate }: { timeSlot: TimeSlot; onUp
   )
 }
 
-// Unified calendar component showing all services and appointments
+// Fixed 8 AM - 10 PM day grid with 1-hour slots, color-coded by availability
+type HourSlotStatus = 'available' | 'booked' | 'pending' | 'confirmed'
+
+type HourSlotDisplay = {
+  hour: number
+  startTime: string
+  endTime: string
+  status: HourSlotStatus
+  label: string
+  appointment?: Appointment
+  timeSlot?: TimeSlot & { service?: Service }
+  service?: Service
+}
+
 function MasterCalendar({ 
   services, 
   appointments, 
@@ -1208,140 +1278,137 @@ function MasterCalendar({
   onUpdate: () => void
 }) {
   const [selectedDate, setSelectedDate] = useState<Date | null>(new Date())
-  const [allSlots, setAllSlots] = useState<Array<TimeSlot & { service?: Service; appointment?: Appointment }>>([])
+  const [hourSlots, setHourSlots] = useState<HourSlotDisplay[]>([])
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    if (selectedDate && services.length > 0) {
-      fetchAllSlots()
+    if (selectedDate) {
+      fetchDaySchedule()
     }
-  }, [selectedDate, services])
+  }, [selectedDate, appointments])
 
-  const fetchAllSlots = async () => {
-    if (!selectedDate || services.length === 0) return
+  const fetchDaySchedule = async () => {
+    if (!selectedDate) return
     
     setLoading(true)
     try {
-      const startOfDay = new Date(selectedDate)
-      startOfDay.setHours(0, 0, 0, 0)
-      const endOfDay = new Date(selectedDate)
-      endOfDay.setHours(23, 59, 59, 999)
+      const dayStart = new Date(selectedDate)
+      dayStart.setHours(0, 0, 0, 0)
+      const dayEnd = new Date(selectedDate)
+      dayEnd.setHours(23, 59, 59, 999)
       
-      // Fetch slots from all services
-      const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:8080/api')
-      const token = localStorage.getItem('token')
-      
-      const slotPromises = services.map(async (service) => {
-        try {
-          const response = await fetch(
-            `${apiUrl}/services/${service.id}/slots?start_date=${startOfDay.toISOString()}&end_date=${endOfDay.toISOString()}`,
-            {
-              headers: {
-                'Authorization': `Bearer ${token}`,
-              },
-            }
-          )
-          const slots = await response.json()
-          return slots.map((slot: TimeSlot) => ({
-            ...slot,
-            service,
-          }))
-        } catch (error) {
-          console.error(`Failed to fetch slots for service ${service.id}:`, error)
-          return []
-        }
+      const dbSlots = await masterAPI.getTimeSlots({
+        start_date: dayStart.toISOString(),
+        end_date: dayEnd.toISOString(),
       })
       
-      const allServiceSlots = await Promise.all(slotPromises)
-      const flattenedSlots = allServiceSlots.flat()
+      const dayAppointments = appointments.filter(apt => {
+        const aptStart = new Date(apt.start_time)
+        return aptStart >= dayStart && aptStart <= dayEnd &&
+          apt.status !== 'rejected' && apt.status !== 'cancelled'
+      })
       
-      // Filter and merge with appointments
-      const daySlots = flattenedSlots
-        .filter((slot: TimeSlot) => {
-          const slotDate = new Date(slot.start_time)
-          return slotDate >= startOfDay && slotDate <= endOfDay
-        })
-        .map((slot: TimeSlot & { service?: Service }) => {
-          // Find matching appointment
-          const matchingAppointment = appointments.find(apt => 
-            apt.service_id === slot.service_id &&
-            new Date(apt.start_time).getTime() === new Date(slot.start_time).getTime() &&
-            new Date(apt.end_time).getTime() === new Date(slot.end_time).getTime()
-          )
-          
-          return {
-            ...slot,
-            appointment: matchingAppointment,
-            // Mark as booked if there's a confirmed appointment or slot is booked
-            is_booked: Boolean(slot.is_booked || (matchingAppointment && matchingAppointment.status === 'confirmed')),
+      // Generate fixed 1-hour slots from 8 AM to 10 PM (14 slots)
+      const slots: HourSlotDisplay[] = []
+      for (let hour = 8; hour <= 21; hour++) {
+        const slotStart = new Date(selectedDate)
+        slotStart.setHours(hour, 0, 0, 0)
+        const slotEnd = new Date(selectedDate)
+        slotEnd.setHours(hour + 1, 0, 0, 0)
+        const slotStartMs = slotStart.getTime()
+        const slotEndMs = slotEnd.getTime()
+        
+        const overlaps = (start: string | Date, end: string | Date) => {
+          const s = typeof start === 'string' ? new Date(start).getTime() : start.getTime()
+          const e = typeof end === 'string' ? new Date(end).getTime() : end.getTime()
+          return s < slotEndMs && e > slotStartMs
+        }
+        
+        // Find overlapping appointment (confirmed takes precedence over pending)
+        const overlappingApts = dayAppointments.filter(a => overlaps(a.start_time, a.end_time))
+        const overlappingApt = overlappingApts.find(a => a.status === 'confirmed') ?? overlappingApts[0]
+        
+        // Find overlapping DB time slot
+        const overlappingDbSlot = dbSlots.find((s: TimeSlot) => 
+          overlaps(s.start_time, s.end_time)
+        ) as (TimeSlot & { service?: Service }) | undefined
+        
+        let status: HourSlotStatus = 'available'
+        let label = 'Available'
+        
+        if (overlappingApt) {
+          if (overlappingApt.status === 'confirmed') {
+            status = 'confirmed'
+            label = `${overlappingApt.user?.name || 'Client'} - ${overlappingApt.service?.name || 'Service'}`
+          } else {
+            status = 'pending'
+            label = `${overlappingApt.user?.name || 'Client'} - ${overlappingApt.service?.name || 'Service'}`
           }
+        } else if (overlappingDbSlot?.is_booked) {
+          status = 'booked'
+          label = 'Booked'
+        } else {
+          status = 'available'
+          label = 'Available'
+        }
+        
+        slots.push({
+          hour,
+          startTime: slotStart.toISOString(),
+          endTime: slotEnd.toISOString(),
+          status,
+          label,
+          appointment: overlappingApt,
+          timeSlot: overlappingDbSlot,
+          service: overlappingDbSlot?.service ?? overlappingApt?.service ?? services[0],
         })
-        .sort((a, b) => 
-          new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
-        )
+      }
       
-      setAllSlots(daySlots)
+      setHourSlots(slots)
     } catch (error) {
-      console.error('Failed to fetch slots:', error)
-      setAllSlots([])
+      console.error('Failed to fetch schedule:', error)
+      setHourSlots([])
     } finally {
       setLoading(false)
     }
   }
 
-  const handleToggleSlot = async (slot: TimeSlot & { service?: Service }) => {
-    if (!slot.service) return
+  const handleToggleSlot = async (slot: HourSlotDisplay) => {
+    if (slot.status === 'confirmed' || slot.status === 'pending') return
+    const service = slot.service ?? services[0]
+    if (!service) return
     
+    const newBooked = slot.status === 'available'
     try {
       await masterAPI.toggleTimeSlotBooking({
-        timeSlotId: slot.id,
-        service_id: slot.service.id,
-        start_time: slot.start_time,
-        end_time: slot.end_time,
-        is_booked: !slot.is_booked,
+        timeSlotId: slot.timeSlot?.id,
+        service_id: service.id,
+        start_time: slot.startTime,
+        end_time: slot.endTime,
+        is_booked: newBooked,
       })
-      // Immediately update local state
-      setAllSlots(prevSlots => 
-        prevSlots.map(s => 
-          s.start_time === slot.start_time && s.service_id === slot.service_id
-            ? { ...s, is_booked: !s.is_booked, available: s.is_booked }
-            : s
-        )
-      )
-      // Also refresh from server
-      fetchAllSlots()
-      onUpdate() // Refresh appointments
-    } catch (error: any) {
-      alert(error.response?.data?.error || 'Failed to update slot')
+      fetchDaySchedule()
+      onUpdate()
+    } catch (error: unknown) {
+      alert(getApiErrorMessage(error, 'Failed to update slot'))
     }
-  }
-
-  const generateCalendarDays = () => {
-    const days: Date[] = []
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    
-    for (let i = 0; i < 30; i++) {
-      const date = new Date(today)
-      date.setDate(today.getDate() + i)
-      days.push(date)
-    }
-    
-    return days
   }
 
   const formatDate = (date: Date) => {
     return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
   }
 
-  const formatTime = (timeString: string) => {
-    const date = new Date(timeString)
-    return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+  const formatHour = (hour: number) => {
+    const h = hour % 12 || 12
+    const ampm = hour < 12 ? 'AM' : 'PM'
+    return `${h}:00 ${ampm}`
   }
 
-  const isToday = (date: Date) => {
-    const today = new Date()
-    return date.toDateString() === today.toDateString()
+  const statusColors: Record<HourSlotStatus, { bg: string; border: string }> = {
+    available: { bg: '#e8f5e9', border: '#4caf50' },
+    booked: { bg: '#eceff1', border: '#78909c' },
+    pending: { bg: '#fff3e0', border: '#f39c12' },
+    confirmed: { bg: '#ffebee', border: '#e74c3c' },
   }
 
   return (
@@ -1351,125 +1418,61 @@ function MasterCalendar({
       padding: '1rem',
       backgroundColor: 'white',
     }}>
-      {/* Calendar */}
       <div style={{ marginBottom: '1rem' }}>
         <h4 style={{ marginBottom: '0.5rem' }}>Select Date</h4>
-        <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: 'repeat(7, 1fr)', 
-          gap: '0.5rem',
-          maxHeight: '200px',
-          overflowY: 'auto',
-          padding: '0.5rem',
-          border: '1px solid #ddd',
-          borderRadius: '4px',
-        }}>
-          {generateCalendarDays().map((date, index) => (
-            <button
-              key={index}
-              onClick={() => setSelectedDate(date)}
-              style={{
-                padding: '0.5rem',
-                border: selectedDate?.toDateString() === date.toDateString() 
-                  ? '2px solid #3498db' 
-                  : '1px solid #ddd',
-                borderRadius: '4px',
-                backgroundColor: selectedDate?.toDateString() === date.toDateString()
-                  ? '#e3f2fd'
-                  : isToday(date)
-                  ? '#fff9c4'
-                  : 'white',
-                cursor: 'pointer',
-                fontSize: '0.75rem',
-                fontWeight: isToday(date) ? 'bold' : 'normal',
-              }}
-            >
-              <div>{date.getDate()}</div>
-              <div style={{ fontSize: '0.65rem', marginTop: '0.25rem' }}>
-                {date.toLocaleDateString('en-US', { weekday: 'short' })}
-              </div>
-            </button>
-          ))}
-        </div>
+        <Calendar
+          selectedDate={selectedDate}
+          onDateSelect={(date) => setSelectedDate(date)}
+        />
       </div>
 
-      {/* Time Slots */}
       {selectedDate && (
         <div>
           <h4 style={{ marginBottom: '0.5rem' }}>
-            Schedule for {formatDate(selectedDate)}
+            Schedule for {formatDate(selectedDate)} — 8 AM to 10 PM
           </h4>
           {loading ? (
-            <div style={{ padding: '1rem', textAlign: 'center', color: '#666' }}>
-              Loading schedule...
-            </div>
+            <div style={{ padding: '1rem', textAlign: 'center', color: '#666' }}>Loading...</div>
           ) : (
-            <div style={{
-              maxHeight: '400px',
-              overflowY: 'auto',
-              border: '1px solid #ddd',
-              borderRadius: '4px',
-              padding: '0.5rem',
-            }}>
-              {allSlots.map((slot, index) => {
-                const isBooked = slot.is_booked || slot.available === false
-                const hasAppointment = slot.appointment && slot.appointment.status !== 'rejected'
-                
-                return (
-                  <div
-                    key={index}
-                    onClick={() => !hasAppointment && handleToggleSlot(slot)}
-                    style={{
-                      padding: '0.75rem',
-                      marginBottom: '0.5rem',
-                      backgroundColor: isBooked ? '#ffebee' : '#e8f5e9',
-                      border: hasAppointment ? '2px solid #f39c12' : '1px solid #ddd',
-                      borderRadius: '4px',
-                      cursor: hasAppointment ? 'default' : 'pointer',
-                      transition: 'all 0.2s',
-                    }}
-                  >
-                    <div style={{ 
-                      display: 'flex', 
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                    }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 'bold', fontSize: '1rem' }}>
-                          {formatTime(slot.start_time)} - {formatTime(slot.end_time)}
-                        </div>
-                        <div style={{ fontSize: '0.9rem', color: '#666', marginTop: '0.25rem' }}>
-                          {slot.service?.name || 'Unknown Service'}
-                        </div>
-                        {hasAppointment && (
-                          <div style={{ fontSize: '0.85rem', color: '#f39c12', marginTop: '0.25rem', fontWeight: 'bold' }}>
-                            Appointment: {slot.appointment?.user?.name} ({slot.appointment?.status})
-                          </div>
-                        )}
-                        {!hasAppointment && (
-                          <div style={{ fontSize: '0.85rem', color: '#666', marginTop: '0.25rem' }}>
-                            {isBooked ? 'Booked (Click to mark available)' : 'Available (Click to mark booked)'}
-                          </div>
-                        )}
+            <>
+              <div style={{ fontSize: '0.8rem', color: '#666', marginBottom: '0.5rem' }}>
+                <span style={{ marginRight: '1rem' }}><span style={{ display: 'inline-block', width: 12, height: 12, backgroundColor: '#e8f5e9', border: '1px solid #4caf50', borderRadius: 2 }} /> Available</span>
+                <span style={{ marginRight: '1rem' }}><span style={{ display: 'inline-block', width: 12, height: 12, backgroundColor: '#eceff1', border: '1px solid #78909c', borderRadius: 2 }} /> Booked</span>
+                <span style={{ marginRight: '1rem' }}><span style={{ display: 'inline-block', width: 12, height: 12, backgroundColor: '#fff3e0', border: '1px solid #f39c12', borderRadius: 2 }} /> Pending</span>
+                <span><span style={{ display: 'inline-block', width: 12, height: 12, backgroundColor: '#ffebee', border: '1px solid #e74c3c', borderRadius: 2 }} /> Confirmed</span>
+              </div>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(2, 1fr)',
+                gap: '0.5rem',
+              }}>
+                {hourSlots.map((slot, index) => {
+                  const colors = statusColors[slot.status]
+                  const canToggle = (slot.status === 'available' || slot.status === 'booked') && services.length > 0
+                  return (
+                    <div
+                      key={index}
+                      onClick={() => canToggle && handleToggleSlot(slot)}
+                      style={{
+                        padding: '0.75rem',
+                        backgroundColor: colors.bg,
+                        border: `2px solid ${colors.border}`,
+                        borderRadius: '4px',
+                        cursor: canToggle ? 'pointer' : 'default',
+                        transition: 'all 0.2s',
+                      }}
+                    >
+                      <div style={{ fontWeight: 'bold', fontSize: '0.9rem' }}>
+                        {formatHour(slot.hour)} – {formatHour(slot.hour + 1)}
                       </div>
-                      <span style={{ 
-                        color: isBooked ? '#e74c3c' : '#27ae60', 
-                        fontWeight: 'bold',
-                        fontSize: '1.2rem',
-                        marginLeft: '1rem',
-                      }}>
-                        {hasAppointment ? '📅' : (isBooked ? '✕' : '✓')}
-                      </span>
+                      <div style={{ fontSize: '0.85rem', color: '#333', marginTop: '0.25rem' }}>
+                        {slot.label}
+                      </div>
                     </div>
-                  </div>
-                )
-              })}
-              {allSlots.length === 0 && (
-                <div style={{ padding: '1rem', textAlign: 'center', color: '#666' }}>
-                  No slots or appointments for this date
-                </div>
-              )}
-            </div>
+                  )
+                })}
+              </div>
+            </>
           )}
         </div>
       )}
