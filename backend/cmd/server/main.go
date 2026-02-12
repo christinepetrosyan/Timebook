@@ -18,8 +18,11 @@ func main() {
 		log.Println("No .env file found, using environment variables")
 	}
 
-	// Load configuration
-	cfg := config.Load()
+	// Load configuration with validation
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatalf("Failed to load configuration: %v", err)
+	}
 
 	// Initialize database
 	database, err := db.Initialize(cfg)
@@ -33,7 +36,17 @@ func main() {
 	// Setup routes
 	mux := http.NewServeMux()
 
+	// Health check (no versioning)
+	mux.HandleFunc("GET /health", h.HealthCheck)
+
+	// API v1 routes
 	// Public routes
+	mux.HandleFunc("POST /api/v1/auth/register", h.Register)
+	mux.HandleFunc("POST /api/v1/auth/login", h.Login)
+	mux.HandleFunc("GET /api/v1/services", h.GetServices)
+	mux.HandleFunc("GET /api/v1/services/{id}/slots", h.GetAvailableSlots)
+
+	// Legacy routes (redirect to v1) for backward compatibility
 	mux.HandleFunc("POST /api/auth/register", h.Register)
 	mux.HandleFunc("POST /api/auth/login", h.Login)
 	mux.HandleFunc("GET /api/services", h.GetServices)
@@ -45,12 +58,38 @@ func main() {
 	masterMiddleware := middleware.RoleMiddleware("master")
 	adminMiddleware := middleware.RoleMiddleware("admin")
 
-	// User routes (protected)
+	// User routes (protected) - v1
+	mux.HandleFunc("GET /api/v1/user/profile", authMiddleware(userMiddleware(http.HandlerFunc(h.GetUserProfile))).ServeHTTP)
+	mux.HandleFunc("POST /api/v1/appointments", authMiddleware(userMiddleware(http.HandlerFunc(h.CreateAppointment))).ServeHTTP)
+	mux.HandleFunc("GET /api/v1/appointments", authMiddleware(userMiddleware(http.HandlerFunc(h.GetAppointments))).ServeHTTP)
+
+	// Legacy user routes (backward compatibility)
 	mux.HandleFunc("GET /api/user/profile", authMiddleware(userMiddleware(http.HandlerFunc(h.GetUserProfile))).ServeHTTP)
 	mux.HandleFunc("POST /api/appointments", authMiddleware(userMiddleware(http.HandlerFunc(h.CreateAppointment))).ServeHTTP)
 	mux.HandleFunc("GET /api/appointments", authMiddleware(userMiddleware(http.HandlerFunc(h.GetAppointments))).ServeHTTP)
 
-	// Master routes (protected)
+	// Master routes (protected) - v1
+	mux.HandleFunc("GET /api/v1/master/profile", authMiddleware(masterMiddleware(http.HandlerFunc(h.GetMasterProfile))).ServeHTTP)
+	mux.HandleFunc("POST /api/v1/master/services", authMiddleware(masterMiddleware(http.HandlerFunc(h.CreateService))).ServeHTTP)
+	mux.HandleFunc("GET /api/v1/master/services", authMiddleware(masterMiddleware(http.HandlerFunc(h.GetMasterServices))).ServeHTTP)
+	mux.HandleFunc("PUT /api/v1/master/services/{id}", authMiddleware(masterMiddleware(http.HandlerFunc(h.UpdateService))).ServeHTTP)
+	mux.HandleFunc("DELETE /api/v1/master/services/{id}", authMiddleware(masterMiddleware(http.HandlerFunc(h.DeleteService))).ServeHTTP)
+	mux.HandleFunc("GET /api/v1/master/appointments", authMiddleware(masterMiddleware(http.HandlerFunc(h.GetMasterAppointments))).ServeHTTP)
+	mux.HandleFunc("PUT /api/v1/master/appointments/{id}/confirm", authMiddleware(masterMiddleware(http.HandlerFunc(h.ConfirmAppointment))).ServeHTTP)
+	mux.HandleFunc("PUT /api/v1/master/appointments/{id}/reject", authMiddleware(masterMiddleware(http.HandlerFunc(h.RejectAppointment))).ServeHTTP)
+
+	// Master time slot routes (protected) - v1
+	mux.HandleFunc("POST /api/v1/master/time-slots", authMiddleware(masterMiddleware(http.HandlerFunc(h.CreateTimeSlot))).ServeHTTP)
+	mux.HandleFunc("GET /api/v1/master/time-slots", authMiddleware(masterMiddleware(http.HandlerFunc(h.GetTimeSlots))).ServeHTTP)
+	mux.HandleFunc("PUT /api/v1/master/time-slots/{id}", authMiddleware(masterMiddleware(http.HandlerFunc(h.UpdateTimeSlot))).ServeHTTP)
+	mux.HandleFunc("PUT /api/v1/master/time-slots/{id}/toggle-booking", authMiddleware(masterMiddleware(http.HandlerFunc(h.ToggleTimeSlotBooking))).ServeHTTP)
+	mux.HandleFunc("DELETE /api/v1/master/time-slots/{id}", authMiddleware(masterMiddleware(http.HandlerFunc(h.DeleteTimeSlot))).ServeHTTP)
+
+	// Master service options (sub-categories) routes (protected) - v1
+	mux.HandleFunc("POST /api/v1/master/services/{id}/options", authMiddleware(masterMiddleware(http.HandlerFunc(h.CreateServiceOption))).ServeHTTP)
+	mux.HandleFunc("DELETE /api/v1/master/service-options/{id}", authMiddleware(masterMiddleware(http.HandlerFunc(h.DeleteServiceOption))).ServeHTTP)
+
+	// Legacy master routes (backward compatibility)
 	mux.HandleFunc("GET /api/master/profile", authMiddleware(masterMiddleware(http.HandlerFunc(h.GetMasterProfile))).ServeHTTP)
 	mux.HandleFunc("POST /api/master/services", authMiddleware(masterMiddleware(http.HandlerFunc(h.CreateService))).ServeHTTP)
 	mux.HandleFunc("GET /api/master/services", authMiddleware(masterMiddleware(http.HandlerFunc(h.GetMasterServices))).ServeHTTP)
@@ -59,26 +98,28 @@ func main() {
 	mux.HandleFunc("GET /api/master/appointments", authMiddleware(masterMiddleware(http.HandlerFunc(h.GetMasterAppointments))).ServeHTTP)
 	mux.HandleFunc("PUT /api/master/appointments/{id}/confirm", authMiddleware(masterMiddleware(http.HandlerFunc(h.ConfirmAppointment))).ServeHTTP)
 	mux.HandleFunc("PUT /api/master/appointments/{id}/reject", authMiddleware(masterMiddleware(http.HandlerFunc(h.RejectAppointment))).ServeHTTP)
-
-	// Master time slot routes (protected)
 	mux.HandleFunc("POST /api/master/time-slots", authMiddleware(masterMiddleware(http.HandlerFunc(h.CreateTimeSlot))).ServeHTTP)
 	mux.HandleFunc("GET /api/master/time-slots", authMiddleware(masterMiddleware(http.HandlerFunc(h.GetTimeSlots))).ServeHTTP)
 	mux.HandleFunc("PUT /api/master/time-slots/{id}", authMiddleware(masterMiddleware(http.HandlerFunc(h.UpdateTimeSlot))).ServeHTTP)
 	mux.HandleFunc("PUT /api/master/time-slots/{id}/toggle-booking", authMiddleware(masterMiddleware(http.HandlerFunc(h.ToggleTimeSlotBooking))).ServeHTTP)
 	mux.HandleFunc("DELETE /api/master/time-slots/{id}", authMiddleware(masterMiddleware(http.HandlerFunc(h.DeleteTimeSlot))).ServeHTTP)
-
-	// Master service options (sub-categories) routes (protected)
 	mux.HandleFunc("POST /api/master/services/{id}/options", authMiddleware(masterMiddleware(http.HandlerFunc(h.CreateServiceOption))).ServeHTTP)
 	mux.HandleFunc("DELETE /api/master/service-options/{id}", authMiddleware(masterMiddleware(http.HandlerFunc(h.DeleteServiceOption))).ServeHTTP)
 
-	// Admin routes (protected)
+	// Admin routes (protected) - v1
+	mux.HandleFunc("GET /api/v1/admin/masters", authMiddleware(adminMiddleware(http.HandlerFunc(h.GetMasters))).ServeHTTP)
+	mux.HandleFunc("GET /api/v1/admin/appointments", authMiddleware(adminMiddleware(http.HandlerFunc(h.GetAllAppointments))).ServeHTTP)
+	mux.HandleFunc("PUT /api/v1/admin/appointments/{id}/confirm", authMiddleware(adminMiddleware(http.HandlerFunc(h.AdminConfirmAppointment))).ServeHTTP)
+	mux.HandleFunc("PUT /api/v1/admin/appointments/{id}/reject", authMiddleware(adminMiddleware(http.HandlerFunc(h.AdminRejectAppointment))).ServeHTTP)
+
+	// Legacy admin routes (backward compatibility)
 	mux.HandleFunc("GET /api/admin/masters", authMiddleware(adminMiddleware(http.HandlerFunc(h.GetMasters))).ServeHTTP)
 	mux.HandleFunc("GET /api/admin/appointments", authMiddleware(adminMiddleware(http.HandlerFunc(h.GetAllAppointments))).ServeHTTP)
 	mux.HandleFunc("PUT /api/admin/appointments/{id}/confirm", authMiddleware(adminMiddleware(http.HandlerFunc(h.AdminConfirmAppointment))).ServeHTTP)
 	mux.HandleFunc("PUT /api/admin/appointments/{id}/reject", authMiddleware(adminMiddleware(http.HandlerFunc(h.AdminRejectAppointment))).ServeHTTP)
 
-	// CORS middleware
-	handler := middleware.CORSMiddleware(mux)
+	// CORS middleware with configured origins
+	handler := middleware.CORSMiddleware(cfg.CORSAllowedOrigins)(mux)
 
 	// Start server
 	port := os.Getenv("SERVER_PORT")
