@@ -115,7 +115,8 @@ func (h *Handlers) GetAvailableSlots(w http.ResponseWriter, r *http.Request) {
 	).Order("start_time ASC").Find(&existingSlots).Error; err == nil {
 		// Merge existing slots into the map (overwrite defaults)
 		for i := range existingSlots {
-			key := existingSlots[i].StartTime.Format(time.RFC3339) + "-" + existingSlots[i].EndTime.Format(time.RFC3339)
+			// Normalize to UTC to ensure consistent key matching
+			key := existingSlots[i].StartTime.UTC().Format(time.RFC3339) + "-" + existingSlots[i].EndTime.UTC().Format(time.RFC3339)
 			slotMap[key] = &existingSlots[i]
 		}
 	}
@@ -131,7 +132,8 @@ func (h *Handlers) GetAvailableSlots(w http.ResponseWriter, r *http.Request) {
 		startDate,
 	).Order("start_time ASC").Find(&appointments).Error; err == nil {
 		for _, apt := range appointments {
-			key := apt.StartTime.Format(time.RFC3339) + "-" + apt.EndTime.Format(time.RFC3339)
+			// Normalize to UTC to ensure consistent key matching with default slots
+			key := apt.StartTime.UTC().Format(time.RFC3339) + "-" + apt.EndTime.UTC().Format(time.RFC3339)
 			if slot, exists := slotMap[key]; exists {
 				// Mark slot as booked if appointment is confirmed
 				if apt.Status == models.StatusConfirmed {

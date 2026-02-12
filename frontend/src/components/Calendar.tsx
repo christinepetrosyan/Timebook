@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 
 interface CalendarProps {
   selectedDate: Date | null
@@ -16,27 +16,27 @@ export default function Calendar({
 }: CalendarProps) {
   const [currentMonth, setCurrentMonth] = useState<Date>(selectedDate || new Date())
 
-  // Navigate to previous month
-  const goToPreviousMonth = () => {
+  // Navigate to previous month (memoized)
+  const goToPreviousMonth = useCallback(() => {
     const newMonth = new Date(currentMonth)
     newMonth.setMonth(currentMonth.getMonth() - 1)
     setCurrentMonth(newMonth)
-  }
+  }, [currentMonth])
 
-  // Navigate to next month
-  const goToNextMonth = () => {
+  // Navigate to next month (memoized)
+  const goToNextMonth = useCallback(() => {
     const newMonth = new Date(currentMonth)
     newMonth.setMonth(currentMonth.getMonth() + 1)
     setCurrentMonth(newMonth)
-  }
+  }, [currentMonth])
 
-  // Format month and year for display
-  const formatMonthYear = (date: Date) => {
-    return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-  }
+  // Format month and year for display (memoized)
+  const formattedMonthYear = useMemo(() => {
+    return currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+  }, [currentMonth])
 
-  // Generate calendar days for the current month
-  const generateCalendarDays = () => {
+  // Generate calendar days for the current month (memoized)
+  const calendarDays = useMemo(() => {
     const days: Date[] = []
     const year = currentMonth.getFullYear()
     const month = currentMonth.getMonth()
@@ -66,20 +66,20 @@ export default function Calendar({
     }
     
     return days
-  }
+  }, [currentMonth])
 
-  // Check if date is today
-  const isToday = (date: Date) => {
+  // Check if date is today (memoized)
+  const isToday = useCallback((date: Date) => {
     const today = new Date()
     return date.toDateString() === today.toDateString()
-  }
+  }, [])
 
-  // Check if date is disabled
-  const isDateDisabled = (date: Date) => {
+  // Check if date is disabled (memoized)
+  const isDateDisabled = useCallback((date: Date) => {
     if (minDate && date < minDate) return true
     if (maxDate && date > maxDate) return true
     return false
-  }
+  }, [minDate, maxDate])
 
   return (
     <div style={{ marginBottom: '1rem' }}>
@@ -116,7 +116,7 @@ export default function Calendar({
           fontWeight: 'bold',
           color: '#2c3e50',
         }}>
-          {formatMonthYear(currentMonth)}
+          {formattedMonthYear}
         </h4>
         
         <button
@@ -169,7 +169,7 @@ export default function Calendar({
         borderRadius: '4px',
         backgroundColor: 'white',
       }}>
-        {generateCalendarDays().map((date, index) => {
+        {calendarDays.map((date, index) => {
           const isCurrentMonth = date.getMonth() === currentMonth.getMonth()
           const isSelected = selectedDate?.toDateString() === date.toDateString()
           const isTodayDate = isToday(date)
