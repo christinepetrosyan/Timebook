@@ -1,7 +1,7 @@
 // React hooks for managing component state and side effects
 import { useState, useEffect } from 'react'
 // API layer for user-related backend requests
-import { userAPI } from '../../services/api'
+import { userAPI, getApiErrorMessage } from '../../services/api'
 // Shared TypeScript types
 import type { Service, Appointment, TimeSlot, ServiceOption } from '../../types'
 // Universal calendar component
@@ -230,9 +230,8 @@ function ServiceCard({ service, onBookingSuccess }: { service: Service; onBookin
       setNotes('')
       // Refresh data without reloading page
       onBookingSuccess()
-    } catch (error: any) {
-      // Display API error message if available
-      alert(error.response?.data?.error || 'Failed to book appointment')
+    } catch (error: unknown) {
+      alert(getApiErrorMessage(error, 'Failed to book appointment'))
     } finally {
       // Stop loading indicator
       setLoadingBooking(false)

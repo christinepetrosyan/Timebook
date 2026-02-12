@@ -202,7 +202,7 @@ function ServiceForm({ onSuccess }: { onSuccess: () => void }) {
         for (const opt of pendingOptions) {
           try {
             await masterAPI.createServiceOption(createdService.id, opt)
-          } catch (err: any) {
+          } catch (err: unknown) {
             console.error('Failed to create sub-category:', err)
           }
         }
@@ -452,8 +452,8 @@ function ServiceCard({ service, onChange }: { service: Service; onChange: () => 
       await masterAPI.updateService(service.id, payload)
       setEditing(false)
       onChange()
-    } catch (error: any) {
-      alert(error.response?.data?.error || 'Failed to update service')
+    } catch (error: unknown) {
+      alert(getApiErrorMessage(error, 'Failed to update service'))
     } finally {
       setSaving(false)
     }
@@ -467,8 +467,8 @@ function ServiceCard({ service, onChange }: { service: Service; onChange: () => 
     try {
       await masterAPI.deleteService(service.id)
       onChange()
-    } catch (error: any) {
-      alert(error.response?.data?.error || 'Failed to delete service')
+    } catch (error: unknown) {
+      alert(getApiErrorMessage(error, 'Failed to delete service'))
     } finally {
       setDeleting(false)
     }
@@ -495,8 +495,8 @@ function ServiceCard({ service, onChange }: { service: Service; onChange: () => 
         price: defaultOptionPrice,
       })
       onChange()
-    } catch (error: any) {
-      alert(error.response?.data?.error || 'Failed to add sub-category')
+    } catch (error: unknown) {
+      alert(getApiErrorMessage(error, 'Failed to add sub-category'))
     } finally {
       setAddingOption(false)
     }
@@ -508,8 +508,8 @@ function ServiceCard({ service, onChange }: { service: Service; onChange: () => 
       await masterAPI.deleteServiceOption(option.id)
       setOptions((prev) => prev.filter((o) => o.id !== option.id))
       onChange()
-    } catch (error: any) {
-      alert(error.response?.data?.error || 'Failed to delete sub-category')
+    } catch (error: unknown) {
+      alert(getApiErrorMessage(error, 'Failed to delete sub-category'))
     }
   }
 
@@ -893,8 +893,8 @@ export function _TimeSlotForm({
         end_time: formData.end_time,
       })
       onSuccess()
-    } catch (error: any) {
-      alert(error.response?.data?.error || 'Failed to create time slot')
+    } catch (error: unknown) {
+      alert(getApiErrorMessage(error, 'Failed to create time slot'))
     } finally {
       setLoading(false)
     }
@@ -1102,8 +1102,8 @@ export function _TimeSlotCard({ timeSlot, onUpdate }: { timeSlot: TimeSlot; onUp
     try {
       await masterAPI.deleteTimeSlot(timeSlot.id)
       onUpdate()
-    } catch (error: any) {
-      alert(error.response?.data?.error || 'Failed to delete time slot')
+    } catch (error: unknown) {
+      alert(getApiErrorMessage(error, 'Failed to delete time slot'))
     } finally {
       setLoading(false)
     }
@@ -1120,8 +1120,8 @@ export function _TimeSlotCard({ timeSlot, onUpdate }: { timeSlot: TimeSlot; onUp
       })
       setIsEditing(false)
       onUpdate()
-    } catch (error: any) {
-      alert(error.response?.data?.error || 'Failed to update time slot')
+    } catch (error: unknown) {
+      alert(getApiErrorMessage(error, 'Failed to update time slot'))
     } finally {
       setLoading(false)
     }
