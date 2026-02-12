@@ -1,5 +1,5 @@
 // React hooks for managing component state and side effects
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 // API layer for user-related backend requests
 import { userAPI, getApiErrorMessage } from '../../services/api'
 // Shared TypeScript types
@@ -18,13 +18,8 @@ export default function UserDashboard() {
   // Global loading flag
   const [loading, setLoading] = useState(true)
 
-  // Load initial data on component mount
-  useEffect(() => {
-    loadData()
-  }, [])
-
   // Fetch services and appointments concurrently
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       const [servicesData, appointmentsData] = await Promise.all([
         userAPI.getServices(),
@@ -40,7 +35,12 @@ export default function UserDashboard() {
       // Stop loading indicator
       setLoading(false)
     }
-  }
+  }, [search])
+
+  // Load initial data on component mount
+  useEffect(() => {
+    loadData()
+  }, [loadData])
 
   // Trigger service search based on current query
   const handleSearch = async () => {
@@ -161,14 +161,7 @@ function ServiceCard({ service, onBookingSuccess }: { service: Service; onBookin
   const [loadingSlots, setLoadingSlots] = useState(false)
   const [loadingBooking, setLoadingBooking] = useState(false)
 
-  // Fetch time slots when date is selected
-  useEffect(() => {
-    if (selectedDate && showBooking) {
-      fetchTimeSlots()
-    }
-  }, [selectedDate, showBooking, service.id])
-
-  const fetchTimeSlots = async () => {
+  const fetchTimeSlots = useCallback(async () => {
     if (!selectedDate) return
     
     setLoadingSlots(true)
@@ -208,7 +201,14 @@ function ServiceCard({ service, onBookingSuccess }: { service: Service; onBookin
     } finally {
       setLoadingSlots(false)
     }
-  }
+  }, [selectedDate, service.id])
+
+  // Fetch time slots when date is selected
+  useEffect(() => {
+    if (selectedDate && showBooking) {
+      fetchTimeSlots()
+    }
+  }, [selectedDate, showBooking, fetchTimeSlots])
 
   // Submit appointment booking request
   const handleBook = async () => {

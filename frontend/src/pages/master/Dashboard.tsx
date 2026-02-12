@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { masterAPI, getApiErrorMessage } from '../../services/api'
 import type { Service, Appointment, TimeSlot, ServiceOption } from '../../types'
 import Calendar from '../../components/Calendar'
@@ -432,7 +432,7 @@ function ServiceCard({ service, onChange }: { service: Service; onChange: () => 
   useEffect(() => {
     setOptions(service.options || [])
     setIsOptionsMode((service.options?.length ?? 0) > 0)
-  }, [service.id, service.options?.length])
+  }, [service.id, service.options])
   const defaultOptionDuration = options[0]?.duration ?? 60
   const defaultOptionPrice = options[0]?.price ?? 0
   const [newOption, setNewOption] = useState({
@@ -857,134 +857,6 @@ function ServiceCard({ service, onChange }: { service: Service; onChange: () => 
   )
 }
 
-export function _TimeSlotForm({
-  services,
-  selectedServiceId,
-  onSuccess,
-}: {
-  services: Service[]
-  selectedServiceId: number | null
-  onSuccess: () => void
-}) {
-  const [formData, setFormData] = useState({
-    service_id: selectedServiceId || (services.length > 0 ? services[0].id : 0),
-    start_time: '',
-    end_time: '',
-  })
-  const [loading, setLoading] = useState(false)
-
-  useEffect(() => {
-    if (selectedServiceId) {
-      setFormData({ ...formData, service_id: selectedServiceId })
-    }
-  }, [selectedServiceId])
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!formData.service_id) {
-      alert('Please select a service')
-      return
-    }
-    setLoading(true)
-    try {
-      await masterAPI.createTimeSlot({
-        service_id: formData.service_id,
-        start_time: formData.start_time,
-        end_time: formData.end_time,
-      })
-      onSuccess()
-    } catch (error: unknown) {
-      alert(getApiErrorMessage(error, 'Failed to create time slot'))
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return (
-    <form
-      onSubmit={handleSubmit}
-      style={{
-        border: '1px solid #ddd',
-        borderRadius: '8px',
-        padding: '1rem',
-        marginBottom: '1rem',
-        backgroundColor: 'white',
-      }}
-    >
-      <div style={{ marginBottom: '1rem' }}>
-        <label style={{ display: 'block', marginBottom: '0.5rem' }}>Service</label>
-        <select
-          value={formData.service_id}
-          onChange={(e) => setFormData({ ...formData, service_id: parseInt(e.target.value) })}
-          required
-          style={{
-            width: '100%',
-            padding: '0.75rem',
-            border: '1px solid #ddd',
-            borderRadius: '4px',
-          }}
-        >
-          <option value="">Select a service</option>
-          {services.map((service) => (
-            <option key={service.id} value={service.id}>
-              {service.options && service.options.length > 0
-                ? `${service.name} (sub-categories)`
-                : `${service.name} (${service.duration} min)`}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-        <div>
-          <label style={{ display: 'block', marginBottom: '0.5rem' }}>Start Time</label>
-          <input
-            type="datetime-local"
-            value={formData.start_time}
-            onChange={(e) => setFormData({ ...formData, start_time: e.target.value })}
-            required
-            style={{
-              width: '100%',
-              padding: '0.75rem',
-              border: '1px solid #ddd',
-              borderRadius: '4px',
-            }}
-          />
-        </div>
-        <div>
-          <label style={{ display: 'block', marginBottom: '0.5rem' }}>End Time</label>
-          <input
-            type="datetime-local"
-            value={formData.end_time}
-            onChange={(e) => setFormData({ ...formData, end_time: e.target.value })}
-            required
-            style={{
-              width: '100%',
-              padding: '0.75rem',
-              border: '1px solid #ddd',
-              borderRadius: '4px',
-            }}
-          />
-        </div>
-      </div>
-      <button
-        type="submit"
-        disabled={loading || !formData.service_id}
-        style={{
-          width: '100%',
-          padding: '0.75rem',
-          backgroundColor: '#9b59b6',
-          color: 'white',
-          border: 'none',
-          borderRadius: '4px',
-          cursor: 'pointer',
-        }}
-      >
-        {loading ? 'Creating...' : 'Create Time Slot'}
-      </button>
-    </form>
-  )
-}
-
 function AppointmentRequestCard({ appointment, onUpdate }: { appointment: Appointment; onUpdate: () => void }) {
   const [loading, setLoading] = useState(false)
 
@@ -1086,174 +958,6 @@ function AppointmentRequestCard({ appointment, onUpdate }: { appointment: Appoin
   )
 }
 
-export function _TimeSlotCard({ timeSlot, onUpdate }: { timeSlot: TimeSlot; onUpdate: () => void }) {
-  const [loading, setLoading] = useState(false)
-  const [isEditing, setIsEditing] = useState(false)
-  const [editData, setEditData] = useState({
-    start_time: timeSlot.start_time.slice(0, 16),
-    end_time: timeSlot.end_time.slice(0, 16),
-  })
-
-  const handleDelete = async () => {
-    if (!timeSlot.id) return
-    if (!confirm('Are you sure you want to delete this time slot?')) return
-    
-    setLoading(true)
-    try {
-      await masterAPI.deleteTimeSlot(timeSlot.id)
-      onUpdate()
-    } catch (error: unknown) {
-      alert(getApiErrorMessage(error, 'Failed to delete time slot'))
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleUpdate = async () => {
-    if (!timeSlot.id) return
-    
-    setLoading(true)
-    try {
-      await masterAPI.updateTimeSlot(timeSlot.id, {
-        start_time: editData.start_time,
-        end_time: editData.end_time,
-      })
-      setIsEditing(false)
-      onUpdate()
-    } catch (error: unknown) {
-      alert(getApiErrorMessage(error, 'Failed to update time slot'))
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return (
-    <div
-      style={{
-        border: '1px solid #ddd',
-        borderRadius: '8px',
-        padding: '1rem',
-        backgroundColor: 'white',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-      }}
-    >
-      <div style={{ flex: 1 }}>
-        <h4>{timeSlot.service?.name || 'Unknown Service'}</h4>
-        {isEditing ? (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '0.5rem' }}>
-            <input
-              type="datetime-local"
-              value={editData.start_time}
-              onChange={(e) => setEditData({ ...editData, start_time: e.target.value })}
-              style={{
-                padding: '0.5rem',
-                border: '1px solid #ddd',
-                borderRadius: '4px',
-              }}
-            />
-            <input
-              type="datetime-local"
-              value={editData.end_time}
-              onChange={(e) => setEditData({ ...editData, end_time: e.target.value })}
-              style={{
-                padding: '0.5rem',
-                border: '1px solid #ddd',
-                borderRadius: '4px',
-              }}
-            />
-          </div>
-        ) : (
-          <>
-            <p>
-              {new Date(timeSlot.start_time).toLocaleString()} - {new Date(timeSlot.end_time).toLocaleString()}
-            </p>
-            <p style={{ color: timeSlot.is_booked ? '#e74c3c' : '#27ae60', fontWeight: 'bold' }}>
-              {timeSlot.is_booked ? 'Booked' : 'Available'}
-            </p>
-          </>
-        )}
-      </div>
-      <div style={{ display: 'flex', gap: '0.5rem' }}>
-        {isEditing ? (
-          <>
-            <button
-              onClick={handleUpdate}
-              disabled={loading}
-              style={{
-                padding: '0.5rem 1rem',
-                backgroundColor: '#27ae60',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-              }}
-            >
-              Save
-            </button>
-            <button
-              onClick={() => {
-                setIsEditing(false)
-                setEditData({
-                  start_time: timeSlot.start_time.slice(0, 16),
-                  end_time: timeSlot.end_time.slice(0, 16),
-                })
-              }}
-              disabled={loading}
-              style={{
-                padding: '0.5rem 1rem',
-                backgroundColor: '#95a5a6',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-              }}
-            >
-              Cancel
-            </button>
-          </>
-        ) : (
-          <>
-            {!timeSlot.is_booked && (
-              <button
-                onClick={() => setIsEditing(true)}
-                disabled={loading}
-                style={{
-                  padding: '0.5rem 1rem',
-                  backgroundColor: '#3498db',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                }}
-              >
-                Edit
-              </button>
-            )}
-            {!timeSlot.is_booked && (
-              <button
-                onClick={handleDelete}
-                disabled={loading}
-                style={{
-                  padding: '0.5rem 1rem',
-                  backgroundColor: '#e74c3c',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                }}
-              >
-                Delete
-              </button>
-            )}
-          </>
-        )}
-      </div>
-    </div>
-  )
-}
-
 // Fixed 8 AM - 10 PM day grid with 1-hour slots, color-coded by availability
 type HourSlotStatus = 'available' | 'booked' | 'pending' | 'confirmed'
 
@@ -1281,13 +985,7 @@ function MasterCalendar({
   const [hourSlots, setHourSlots] = useState<HourSlotDisplay[]>([])
   const [loading, setLoading] = useState(false)
 
-  useEffect(() => {
-    if (selectedDate) {
-      fetchDaySchedule()
-    }
-  }, [selectedDate, appointments])
-
-  const fetchDaySchedule = async () => {
+  const fetchDaySchedule = useCallback(async () => {
     if (!selectedDate) return
     
     setLoading(true)
@@ -1371,7 +1069,13 @@ function MasterCalendar({
     } finally {
       setLoading(false)
     }
-  }
+  }, [selectedDate, appointments, services])
+
+  useEffect(() => {
+    if (selectedDate) {
+      fetchDaySchedule()
+    }
+  }, [selectedDate, fetchDaySchedule])
 
   const handleToggleSlot = async (slot: HourSlotDisplay) => {
     if (slot.status === 'confirmed' || slot.status === 'pending') return
