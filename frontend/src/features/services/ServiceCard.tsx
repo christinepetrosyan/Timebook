@@ -166,8 +166,7 @@ export default function ServiceCard({ service, onBookingSuccess }: ServiceCardPr
                   padding: '0.5rem',
                 }}>
                   {timeSlots.map((slot, index) => {
-                    const isAvailable = (slot.available !== false && slot.available !== undefined) && 
-                                       (slot.is_booked === false || slot.is_booked === undefined)
+                    const isAvailable = slot.available === true && !slot.is_booked
                     return (
                       <div
                         key={index}
