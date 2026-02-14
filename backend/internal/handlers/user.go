@@ -122,10 +122,11 @@ func (h *Handlers) GetAvailableSlots(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check for confirmed/pending appointments that should mark slots as booked
+	// Since masters have a unified calendar, check appointments across ALL services for this master
 	var appointments []models.Appointment
 	if err := h.DB.Where(
-		"service_id = ? AND deleted_at IS NULL AND status IN (?, ?) AND start_time < ? AND end_time > ?",
-		serviceID,
+		"master_id = ? AND deleted_at IS NULL AND status IN (?, ?) AND start_time < ? AND end_time > ?",
+		service.MasterID,
 		models.StatusPending,
 		models.StatusConfirmed,
 		endDate,
@@ -135,18 +136,17 @@ func (h *Handlers) GetAvailableSlots(w http.ResponseWriter, r *http.Request) {
 			// Normalize to UTC to ensure consistent key matching with default slots
 			key := apt.StartTime.UTC().Format(time.RFC3339) + "-" + apt.EndTime.UTC().Format(time.RFC3339)
 			if slot, exists := slotMap[key]; exists {
-				// Mark slot as booked if appointment is confirmed
-				if apt.Status == models.StatusConfirmed {
-					slot.IsBooked = true
-				}
+				// Mark slot as booked (master can't have overlapping appointments across services)
+				slot.IsBooked = true
 			} else {
 				// Create slot entry for appointment that doesn't match default schedule
+				// This slot should also be marked as booked
 				slotMap[key] = &models.TimeSlot{
 					MasterID:  apt.MasterID,
 					ServiceID: apt.ServiceID,
 					StartTime: apt.StartTime,
 					EndTime:   apt.EndTime,
-					IsBooked:  apt.Status == models.StatusConfirmed,
+					IsBooked:  true,
 				}
 			}
 		}
