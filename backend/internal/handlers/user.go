@@ -3,7 +3,6 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
-	"sort"
 	"time"
 
 	"github.com/timebook/backend/internal/models"
@@ -74,96 +73,48 @@ func (h *Handlers) GetAvailableSlots(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Generate default time slots for each day in the range
-	// Default schedule: 9 AM to 6 PM, slots every hour based on service duration
-	slotMap := make(map[string]*models.TimeSlot) // Key: start_time-end_time
-
-	// Generate slots for each day in the range
-	currentDate := startDate
-	for currentDate.Before(endDate) || currentDate.Equal(endDate) {
-		// Generate slots from 9 AM to 6 PM
-		for hour := 9; hour < 18; hour++ {
-			slotStart := time.Date(currentDate.Year(), currentDate.Month(), currentDate.Day(), hour, 0, 0, 0, time.UTC)
-			slotEnd := slotStart.Add(minutesToDuration(service.Duration))
-
-			// Skip if slot end time is after endDate
-			if slotEnd.After(endDate) {
-				break
-			}
-
-			key := slotStart.Format(time.RFC3339) + "-" + slotEnd.Format(time.RFC3339)
-			slotMap[key] = &models.TimeSlot{
-				MasterID:  service.MasterID,
-				ServiceID: service.ID,
-				StartTime: slotStart,
-				EndTime:   slotEnd,
-				IsBooked:  false,
-			}
-		}
-		// Move to next day
-		currentDate = currentDate.AddDate(0, 0, 1)
-		currentDate = time.Date(currentDate.Year(), currentDate.Month(), currentDate.Day(), 0, 0, 0, 0, currentDate.Location())
-	}
-
-	// Query existing time slots from database for the date range
+	// Only show slots that the master has actually created for this service.
+	// Filter out degenerate slots where start_time == end_time (caused by
+	// 0-duration services with subcategories).
 	var existingSlots []models.TimeSlot
 	if err := h.DB.Where(
-		"service_id = ? AND deleted_at IS NULL AND start_time < ? AND end_time > ?",
+		"service_id = ? AND deleted_at IS NULL AND start_time >= ? AND end_time <= ? AND start_time < end_time",
 		serviceID,
-		endDate,
 		startDate,
-	).Order("start_time ASC").Find(&existingSlots).Error; err == nil {
-		// Merge existing slots into the map (overwrite defaults)
-		for i := range existingSlots {
-			// Normalize to UTC to ensure consistent key matching
-			key := existingSlots[i].StartTime.UTC().Format(time.RFC3339) + "-" + existingSlots[i].EndTime.UTC().Format(time.RFC3339)
-			slotMap[key] = &existingSlots[i]
-		}
+		endDate,
+	).Order("start_time ASC").Find(&existingSlots).Error; err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Failed to fetch time slots")
+		return
 	}
 
-	// Check for confirmed/pending appointments that should mark slots as booked
-	// Since masters have a unified calendar, check appointments across ALL services for this master
+	// Fetch pending/confirmed appointments across ALL services for this master
+	// (unified calendar: a booking on any service blocks the time).
+	// Use overlap query: appointment overlaps the window if apt.start < endDate AND apt.end > startDate
 	var appointments []models.Appointment
-	if err := h.DB.Where(
+	h.DB.Where(
 		"master_id = ? AND deleted_at IS NULL AND status IN (?, ?) AND start_time < ? AND end_time > ?",
 		service.MasterID,
 		models.StatusPending,
 		models.StatusConfirmed,
 		endDate,
 		startDate,
-	).Order("start_time ASC").Find(&appointments).Error; err == nil {
+	).Find(&appointments)
+
+	// Mark each slot as booked if ANY appointment overlaps its time range
+	for i := range existingSlots {
+		slotStart := existingSlots[i].StartTime
+		slotEnd := existingSlots[i].EndTime
 		for _, apt := range appointments {
-			// Normalize to UTC to ensure consistent key matching with default slots
-			key := apt.StartTime.UTC().Format(time.RFC3339) + "-" + apt.EndTime.UTC().Format(time.RFC3339)
-			if slot, exists := slotMap[key]; exists {
-				// Mark slot as booked (master can't have overlapping appointments across services)
-				slot.IsBooked = true
-			} else {
-				// Create slot entry for appointment that doesn't match default schedule
-				// This slot should also be marked as booked
-				slotMap[key] = &models.TimeSlot{
-					MasterID:  apt.MasterID,
-					ServiceID: apt.ServiceID,
-					StartTime: apt.StartTime,
-					EndTime:   apt.EndTime,
-					IsBooked:  true,
-				}
+			if apt.StartTime.Before(slotEnd) && apt.EndTime.After(slotStart) {
+				existingSlots[i].IsBooked = true
+				break
 			}
 		}
 	}
 
-	// Convert map to slice and sort
-	timeSlots := make([]models.TimeSlot, 0, len(slotMap))
-	for _, slot := range slotMap {
-		timeSlots = append(timeSlots, *slot)
-	}
-	sort.Slice(timeSlots, func(i, j int) bool {
-		return timeSlots[i].StartTime.Before(timeSlots[j].StartTime)
-	})
-
 	// Convert to response format
-	slots := make([]map[string]interface{}, len(timeSlots))
-	for i, slot := range timeSlots {
+	slots := make([]map[string]interface{}, len(existingSlots))
+	for i, slot := range existingSlots {
 		slots[i] = map[string]interface{}{
 			"id":         slot.ID,
 			"service_id": slot.ServiceID,
@@ -181,9 +132,10 @@ func (h *Handlers) CreateAppointment(w http.ResponseWriter, r *http.Request) {
 	userID := r.Context().Value("user_id").(uint)
 
 	var req struct {
-		ServiceID uint   `json:"service_id"`
-		StartTime string `json:"start_time"`
-		Notes     string `json:"notes"`
+		ServiceID       uint   `json:"service_id"`
+		ServiceOptionID *uint  `json:"service_option_id,omitempty"`
+		StartTime       string `json:"start_time"`
+		Notes           string `json:"notes"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -193,9 +145,27 @@ func (h *Handlers) CreateAppointment(w http.ResponseWriter, r *http.Request) {
 
 	// Get service
 	var service models.Service
-	if err := h.DB.Preload("Master").First(&service, req.ServiceID).Error; err != nil {
+	if err := h.DB.Preload("Master").Preload("Options").First(&service, req.ServiceID).Error; err != nil {
 		respondWithError(w, http.StatusNotFound, "Service not found")
 		return
+	}
+
+	// Determine the duration to use
+	duration := service.Duration
+
+	// If the service has sub-categories (options), a selection is required
+	if len(service.Options) > 0 {
+		if req.ServiceOptionID == nil {
+			respondWithError(w, http.StatusBadRequest, "This service has sub-categories. Please select one.")
+			return
+		}
+		// Verify the option belongs to this service
+		var option models.ServiceOption
+		if err := h.DB.Where("id = ? AND service_id = ?", *req.ServiceOptionID, req.ServiceID).First(&option).Error; err != nil {
+			respondWithError(w, http.StatusNotFound, "Service sub-category not found")
+			return
+		}
+		duration = option.Duration
 	}
 
 	// Parse start time
@@ -205,8 +175,8 @@ func (h *Handlers) CreateAppointment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Calculate end time
-	endTime := startTime.Add(minutesToDuration(service.Duration))
+	// Calculate end time using the resolved duration
+	endTime := startTime.Add(minutesToDuration(duration))
 
 	// Check for conflicting appointments (pending or confirmed)
 	var conflictingAppointment models.Appointment
@@ -243,13 +213,14 @@ func (h *Handlers) CreateAppointment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	appointment := models.Appointment{
-		UserID:    userID,
-		MasterID:  service.MasterID,
-		ServiceID: req.ServiceID,
-		StartTime: startTime,
-		EndTime:   endTime,
-		Status:    models.StatusPending,
-		Notes:     req.Notes,
+		UserID:          userID,
+		MasterID:        service.MasterID,
+		ServiceID:       req.ServiceID,
+		ServiceOptionID: req.ServiceOptionID,
+		StartTime:       startTime,
+		EndTime:         endTime,
+		Status:          models.StatusPending,
+		Notes:           req.Notes,
 	}
 
 	if err := h.DB.Create(&appointment).Error; err != nil {
@@ -262,7 +233,7 @@ func (h *Handlers) CreateAppointment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.DB.Preload("Service").Preload("Master").Preload("User").First(&appointment, appointment.ID)
+	h.DB.Preload("Service").Preload("Master").Preload("User").Preload("ServiceOption").First(&appointment, appointment.ID)
 	respondWithJSON(w, http.StatusCreated, appointment)
 }
 
@@ -270,7 +241,7 @@ func (h *Handlers) GetAppointments(w http.ResponseWriter, r *http.Request) {
 	userID := r.Context().Value("user_id").(uint)
 
 	var appointments []models.Appointment
-	if err := h.DB.Preload("Service").Preload("Master").Preload("Master.User").Where("user_id = ?", userID).Find(&appointments).Error; err != nil {
+	if err := h.DB.Preload("Service").Preload("Master").Preload("Master.User").Preload("ServiceOption").Where("user_id = ?", userID).Find(&appointments).Error; err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Failed to fetch appointments")
 		return
 	}

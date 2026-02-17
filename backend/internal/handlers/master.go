@@ -242,6 +242,65 @@ func (h *Handlers) CreateServiceOption(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, http.StatusCreated, option)
 }
 
+// UpdateServiceOption updates an existing sub-category/variant
+func (h *Handlers) UpdateServiceOption(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value("user_id").(uint)
+	optionID, err := getIDParam(r)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid service option ID")
+		return
+	}
+
+	var req struct {
+		Name        string  `json:"name"`
+		Description string  `json:"description"`
+		Duration    int     `json:"duration"`
+		Price       float64 `json:"price"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	// Get master profile
+	var masterProfile models.MasterProfile
+	if err := h.DB.Where("user_id = ?", userID).First(&masterProfile).Error; err != nil {
+		respondWithError(w, http.StatusNotFound, "Master profile not found")
+		return
+	}
+
+	// Ensure option belongs to a service owned by this master
+	var option models.ServiceOption
+	if err := h.DB.Preload("Service").Where("id = ?", optionID).First(&option).Error; err != nil {
+		respondWithError(w, http.StatusNotFound, "Service option not found")
+		return
+	}
+
+	if option.Service.MasterID != masterProfile.ID {
+		respondWithError(w, http.StatusForbidden, "Not allowed to modify this option")
+		return
+	}
+
+	// Update fields
+	if req.Name != "" {
+		option.Name = req.Name
+	}
+	option.Description = req.Description
+	if req.Duration > 0 {
+		option.Duration = req.Duration
+	}
+	if req.Price >= 0 {
+		option.Price = req.Price
+	}
+
+	if err := h.DB.Save(&option).Error; err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Failed to update service option")
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, option)
+}
+
 // DeleteServiceOption removes a sub-category/variant
 func (h *Handlers) DeleteServiceOption(w http.ResponseWriter, r *http.Request) {
 	userID := r.Context().Value("user_id").(uint)
@@ -304,7 +363,7 @@ func (h *Handlers) GetMasterAppointments(w http.ResponseWriter, r *http.Request)
 	}
 
 	var appointments []models.Appointment
-	if err := h.DB.Preload("User").Preload("Service").Where("master_id = ?", masterProfile.ID).Find(&appointments).Error; err != nil {
+	if err := h.DB.Preload("User").Preload("Service").Preload("ServiceOption").Where("master_id = ?", masterProfile.ID).Find(&appointments).Error; err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Failed to fetch appointments")
 		return
 	}

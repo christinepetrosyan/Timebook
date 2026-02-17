@@ -38,6 +38,7 @@ export interface Appointment {
   user_id: number
   master_id: number
   service_id: number
+  service_option_id?: number
   start_time: string
   end_time: string
   status: AppointmentStatus
@@ -45,6 +46,7 @@ export interface Appointment {
   user?: User
   master?: MasterProfile
   service?: Service
+  service_option?: ServiceOption
 }
 
 export interface TimeSlot {

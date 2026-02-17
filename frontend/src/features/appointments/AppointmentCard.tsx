@@ -26,6 +26,11 @@ export default function AppointmentCard({ appointment }: AppointmentCardProps) {
     >
       <div>
         <h4>{appointment.service?.name}</h4>
+        {appointment.service_option && (
+          <p style={{ fontSize: '0.9rem', color: '#555' }}>
+            Sub-category: {appointment.service_option.name}
+          </p>
+        )}
         <p>Master: {appointment.master?.user?.name}</p>
         <p>Time: {new Date(appointment.start_time).toLocaleString()}</p>
         {appointment.notes && <p>Notes: {appointment.notes}</p>}

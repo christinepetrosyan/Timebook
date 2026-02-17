@@ -87,6 +87,7 @@ func main() {
 
 	// Master service options (sub-categories) routes (protected) - v1
 	mux.HandleFunc("POST /api/v1/master/services/{id}/options", authMiddleware(masterMiddleware(http.HandlerFunc(h.CreateServiceOption))).ServeHTTP)
+	mux.HandleFunc("PUT /api/v1/master/service-options/{id}", authMiddleware(masterMiddleware(http.HandlerFunc(h.UpdateServiceOption))).ServeHTTP)
 	mux.HandleFunc("DELETE /api/v1/master/service-options/{id}", authMiddleware(masterMiddleware(http.HandlerFunc(h.DeleteServiceOption))).ServeHTTP)
 
 	// Legacy master routes (backward compatibility)
@@ -104,6 +105,7 @@ func main() {
 	mux.HandleFunc("PUT /api/master/time-slots/{id}/toggle-booking", authMiddleware(masterMiddleware(http.HandlerFunc(h.ToggleTimeSlotBooking))).ServeHTTP)
 	mux.HandleFunc("DELETE /api/master/time-slots/{id}", authMiddleware(masterMiddleware(http.HandlerFunc(h.DeleteTimeSlot))).ServeHTTP)
 	mux.HandleFunc("POST /api/master/services/{id}/options", authMiddleware(masterMiddleware(http.HandlerFunc(h.CreateServiceOption))).ServeHTTP)
+	mux.HandleFunc("PUT /api/master/service-options/{id}", authMiddleware(masterMiddleware(http.HandlerFunc(h.UpdateServiceOption))).ServeHTTP)
 	mux.HandleFunc("DELETE /api/master/service-options/{id}", authMiddleware(masterMiddleware(http.HandlerFunc(h.DeleteServiceOption))).ServeHTTP)
 
 	// Admin routes (protected) - v1

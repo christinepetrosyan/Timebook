@@ -28,7 +28,7 @@ export function useCreateAppointment() {
   const queryClient = useQueryClient()
   
   return useMutation({
-    mutationFn: (data: { service_id: number; start_time: string; notes?: string }) =>
+    mutationFn: (data: { service_id: number; service_option_id?: number; start_time: string; notes?: string }) =>
       userAPI.createAppointment(data),
     onSuccess: () => {
       // Invalidate appointments cache
