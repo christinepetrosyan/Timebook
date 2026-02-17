@@ -442,6 +442,43 @@ function ServiceCard({ service, onChange }: { service: Service; onChange: () => 
     price: defaultOptionPrice,
   })
   const [addingOption, setAddingOption] = useState(false)
+  const [editingOptionId, setEditingOptionId] = useState<number | null>(null)
+  const [editOptionData, setEditOptionData] = useState({ name: '', description: '', duration: 60, price: 0 })
+  const [savingOption, setSavingOption] = useState(false)
+
+  const startEditingOption = (opt: ServiceOption) => {
+    setEditingOptionId(opt.id)
+    setEditOptionData({
+      name: opt.name,
+      description: opt.description || '',
+      duration: opt.duration,
+      price: opt.price,
+    })
+  }
+
+  const handleUpdateOption = async () => {
+    if (editingOptionId === null) return
+    if (!editOptionData.name.trim()) {
+      alert('Please enter a name for the sub-category')
+      return
+    }
+    setSavingOption(true)
+    try {
+      const updated = await masterAPI.updateServiceOption(editingOptionId, {
+        name: editOptionData.name,
+        description: editOptionData.description,
+        duration: editOptionData.duration,
+        price: editOptionData.price,
+      })
+      setOptions((prev) => prev.map((o) => (o.id === editingOptionId ? { ...o, ...updated } : o)))
+      setEditingOptionId(null)
+      onChange()
+    } catch (error: unknown) {
+      alert(getApiErrorMessage(error, 'Failed to update sub-category'))
+    } finally {
+      setSavingOption(false)
+    }
+  }
 
   const handleSave = async () => {
     setSaving(true)
@@ -722,40 +759,167 @@ function ServiceCard({ service, onChange }: { service: Service; onChange: () => 
         {(hasOptions || isOptionsMode) && options.length > 0 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '0.5rem' }}>
             {options.map((opt) => (
-              <div
-                key={opt.id}
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  padding: '0.4rem 0.5rem',
-                  borderRadius: '4px',
-                  backgroundColor: '#f9f9f9',
-                }}
-              >
-                <div>
-                  <div style={{ fontWeight: 500, fontSize: '0.9rem' }}>{opt.name}</div>
-                  {opt.description && (
-                    <div style={{ fontSize: '0.8rem', color: '#666' }}>{opt.description}</div>
-                  )}
-                  <div style={{ fontSize: '0.8rem', color: '#555' }}>
-                    {opt.duration} min • ${opt.price}
+              <div key={opt.id}>
+                {editingOptionId === opt.id ? (
+                  /* Inline edit form for the sub-category */
+                  <div
+                    style={{
+                      padding: '0.5rem',
+                      borderRadius: '4px',
+                      backgroundColor: '#f0ecf8',
+                      border: '1px solid #d5c8e8',
+                    }}
+                  >
+                    <div style={{ marginBottom: '0.4rem' }}>
+                      <input
+                        type="text"
+                        placeholder="Sub-category name"
+                        value={editOptionData.name}
+                        onChange={(e) => setEditOptionData({ ...editOptionData, name: e.target.value })}
+                        style={{
+                          width: '100%',
+                          padding: '0.4rem',
+                          border: '1px solid #ccc',
+                          borderRadius: '4px',
+                          marginBottom: '0.3rem',
+                          fontSize: '0.85rem',
+                        }}
+                      />
+                      <textarea
+                        placeholder="Description (optional)"
+                        value={editOptionData.description}
+                        onChange={(e) => setEditOptionData({ ...editOptionData, description: e.target.value })}
+                        style={{
+                          width: '100%',
+                          padding: '0.4rem',
+                          border: '1px solid #ccc',
+                          borderRadius: '4px',
+                          fontSize: '0.85rem',
+                          minHeight: '40px',
+                        }}
+                      />
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginBottom: '0.4rem' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.75rem', marginBottom: '0.15rem' }}>Duration (min)</label>
+                        <input
+                          type="number"
+                          value={editOptionData.duration}
+                          onChange={(e) => setEditOptionData({ ...editOptionData, duration: parseInt(e.target.value) || 0 })}
+                          style={{
+                            width: '100%',
+                            padding: '0.4rem',
+                            border: '1px solid #ccc',
+                            borderRadius: '4px',
+                            fontSize: '0.85rem',
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.75rem', marginBottom: '0.15rem' }}>Price</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={editOptionData.price}
+                          onChange={(e) => setEditOptionData({ ...editOptionData, price: parseFloat(e.target.value) || 0 })}
+                          style={{
+                            width: '100%',
+                            padding: '0.4rem',
+                            border: '1px solid #ccc',
+                            borderRadius: '4px',
+                            fontSize: '0.85rem',
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.4rem' }}>
+                      <button
+                        onClick={handleUpdateOption}
+                        disabled={savingOption}
+                        style={{
+                          flex: 1,
+                          padding: '0.4rem',
+                          backgroundColor: '#9b59b6',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontSize: '0.8rem',
+                        }}
+                      >
+                        {savingOption ? 'Saving...' : 'Save'}
+                      </button>
+                      <button
+                        onClick={() => setEditingOptionId(null)}
+                        disabled={savingOption}
+                        style={{
+                          flex: 1,
+                          padding: '0.4rem',
+                          backgroundColor: 'transparent',
+                          color: '#666',
+                          border: '1px solid #ccc',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontSize: '0.8rem',
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   </div>
-                </div>
-                <button
-                  onClick={() => handleDeleteOption(opt)}
-                  style={{
-                    padding: '0.25rem 0.6rem',
-                    backgroundColor: 'transparent',
-                    color: '#e74c3c',
-                    border: '1px solid #e74c3c',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    fontSize: '0.8rem',
-                  }}
-                >
-                  Remove
-                </button>
+                ) : (
+                  /* Display mode for the sub-category */
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '0.4rem 0.5rem',
+                      borderRadius: '4px',
+                      backgroundColor: '#f9f9f9',
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontWeight: 500, fontSize: '0.9rem' }}>{opt.name}</div>
+                      {opt.description && (
+                        <div style={{ fontSize: '0.8rem', color: '#666' }}>{opt.description}</div>
+                      )}
+                      <div style={{ fontSize: '0.8rem', color: '#555' }}>
+                        {opt.duration} min • ${opt.price}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.3rem' }}>
+                      <button
+                        onClick={() => startEditingOption(opt)}
+                        style={{
+                          padding: '0.25rem 0.6rem',
+                          backgroundColor: 'transparent',
+                          color: '#9b59b6',
+                          border: '1px solid #9b59b6',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontSize: '0.8rem',
+                        }}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => handleDeleteOption(opt)}
+                        style={{
+                          padding: '0.25rem 0.6rem',
+                          backgroundColor: 'transparent',
+                          color: '#e74c3c',
+                          border: '1px solid #e74c3c',
+                          borderRadius: '4px',
+                          cursor: 'pointer',
+                          fontSize: '0.8rem',
+                        }}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
           </div>

@@ -74,6 +74,7 @@ export const userAPI = {
 
   createAppointment: async (data: {
     service_id: number
+    service_option_id?: number
     start_time: string
     notes?: string
   }): Promise<Appointment> => {
@@ -203,6 +204,16 @@ export const masterAPI = {
     price: number
   }): Promise<ServiceOption> => {
     const response = await api.post<ServiceOption>(`/master/services/${serviceId}/options`, data)
+    return response.data
+  },
+
+  updateServiceOption: async (optionId: number, data: {
+    name: string
+    description?: string
+    duration: number
+    price: number
+  }): Promise<ServiceOption> => {
+    const response = await api.put<ServiceOption>(`/master/service-options/${optionId}`, data)
     return response.data
   },
 
