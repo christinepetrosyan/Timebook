@@ -50,22 +50,20 @@ export default function ServiceCard({ service, onBookingSuccess }: ServiceCardPr
       const endOfDay = new Date(date)
       endOfDay.setHours(23, 59, 59, 999)
 
+      // Backend generates the full 8 AM–10 PM working-hours grid
+      // and marks each slot as available or booked based on
+      // master-wide DB slots and appointments.
       const slots = await userAPI.getAvailableSlots(
         service.id,
         startOfDay.toISOString(),
         endOfDay.toISOString()
       )
 
-      const daySlots = slots.filter(slot => {
-        const slotDate = new Date(slot.start_time)
-        return slotDate >= startOfDay && slotDate <= endOfDay
-      })
-
-      const sortedSlots = daySlots.sort((a, b) =>
+      const sorted = [...slots].sort((a, b) =>
         new Date(a.start_time).getTime() - new Date(b.start_time).getTime()
       )
 
-      setTimeSlots(sortedSlots)
+      setTimeSlots(sorted)
     } catch (error) {
       console.error('Failed to fetch time slots:', error)
       setTimeSlots([])
@@ -425,8 +423,9 @@ export default function ServiceCard({ service, onBookingSuccess }: ServiceCardPr
                     gap: '0.4rem',
                   }}>
                     {timeSlots.map((slot, index) => {
-                      const isAvailable = slot.available === true && !slot.is_booked
+                      const isAvailable = slot.available === true
                       const isChosen = selectedSlot?.start_time === slot.start_time
+                      const statusLabel = isAvailable ? 'Available' : (slot.is_past ? 'Past' : 'Booked')
                       return (
                         <div
                           key={index}
@@ -453,7 +452,7 @@ export default function ServiceCard({ service, onBookingSuccess }: ServiceCardPr
                               {formatTime(slot.start_time)} - {formatTime(slot.end_time)}
                             </div>
                             <div style={{ fontSize: '0.8rem', color: '#666' }}>
-                              {isAvailable ? 'Available' : 'Booked'}
+                              {statusLabel}
                             </div>
                           </div>
                           {isChosen && (

@@ -69,11 +69,13 @@ func getIDParam(r *http.Request) (uint, error) {
 }
 
 func parseTime(timeStr string) (time.Time, error) {
-	// Support multiple time formats
+	// Support multiple time formats (including JS toISOString with milliseconds)
 	formats := []string{
+		time.RFC3339Nano,
 		time.RFC3339,
 		"2006-01-02T15:04:05",
 		"2006-01-02 15:04:05",
+		"2006-01-02",
 	}
 
 	for _, format := range formats {

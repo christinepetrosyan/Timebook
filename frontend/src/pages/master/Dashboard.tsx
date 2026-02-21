@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { masterAPI, getApiErrorMessage } from '../../services/api'
-import type { Service, Appointment, TimeSlot, ServiceOption } from '../../types'
+import type { Service, Appointment, TimeSlot, ServiceOption, User } from '../../types'
 import Calendar from '../../components/Calendar'
+import { useDebounce } from '../../hooks/useDebounce'
 
 type TabType = 'services' | 'calendar' | 'requests'
 
@@ -1148,6 +1149,29 @@ function MasterCalendar({
   const [selectedDate, setSelectedDate] = useState<Date | null>(new Date())
   const [hourSlots, setHourSlots] = useState<HourSlotDisplay[]>([])
   const [loading, setLoading] = useState(false)
+  const [bookModalSlot, setBookModalSlot] = useState<HourSlotDisplay | null>(null)
+  const [bookModalStep, setBookModalStep] = useState<'choice' | 'work'>('choice')
+  const [workClientSearch, setWorkClientSearch] = useState('')
+  const [workSelectedClient, setWorkSelectedClient] = useState<User | null>(null)
+  const [workSelectedService, setWorkSelectedService] = useState<Service | null>(null)
+  const [workSelectedOption, setWorkSelectedOption] = useState<ServiceOption | null>(null)
+  const [workSearchResults, setWorkSearchResults] = useState<User[]>([])
+  const [workSearchLoading, setWorkSearchLoading] = useState(false)
+  const [bookSubmitting, setBookSubmitting] = useState(false)
+
+  const debouncedClientSearch = useDebounce(workClientSearch, 300)
+
+  useEffect(() => {
+    if (debouncedClientSearch.length >= 2) {
+      setWorkSearchLoading(true)
+      masterAPI.searchUsers(debouncedClientSearch)
+        .then(setWorkSearchResults)
+        .catch(() => setWorkSearchResults([]))
+        .finally(() => setWorkSearchLoading(false))
+    } else {
+      setWorkSearchResults([])
+    }
+  }, [debouncedClientSearch])
 
   const fetchDaySchedule = useCallback(async () => {
     if (!selectedDate) return
@@ -1245,7 +1269,7 @@ function MasterCalendar({
     if (slot.status === 'confirmed' || slot.status === 'pending') return
     const service = slot.service ?? services[0]
     if (!service) return
-    
+
     const newBooked = slot.status === 'available'
     try {
       await masterAPI.toggleTimeSlotBooking({
@@ -1259,6 +1283,79 @@ function MasterCalendar({
       onUpdate()
     } catch (error: unknown) {
       alert(getApiErrorMessage(error, 'Failed to update slot'))
+    }
+  }
+
+  const handleCancelSlot = async (e: React.MouseEvent, slot: HourSlotDisplay) => {
+    e.stopPropagation()
+    if (slot.status !== 'booked') return
+    await handleToggleSlot(slot)
+  }
+
+  const handleCancelAppointment = async (e: React.MouseEvent, slot: HourSlotDisplay) => {
+    e.stopPropagation()
+    if (!slot.appointment || (slot.status !== 'confirmed' && slot.status !== 'pending')) return
+    try {
+      await masterAPI.rejectAppointment(slot.appointment.id)
+      fetchDaySchedule()
+      onUpdate()
+    } catch (error: unknown) {
+      alert(getApiErrorMessage(error, 'Failed to cancel appointment'))
+    }
+  }
+
+  const closeBookModal = () => {
+    setBookModalSlot(null)
+    setBookModalStep('choice')
+    setWorkClientSearch('')
+    setWorkSelectedClient(null)
+    setWorkSelectedService(null)
+    setWorkSelectedOption(null)
+    setWorkSearchResults([])
+  }
+
+  const handleBookForMyself = async () => {
+    if (!bookModalSlot) return
+    const service = bookModalSlot.service ?? services[0]
+    if (!service) return
+    setBookSubmitting(true)
+    try {
+      await masterAPI.toggleTimeSlotBooking({
+        timeSlotId: bookModalSlot.timeSlot?.id,
+        service_id: service.id,
+        start_time: bookModalSlot.startTime,
+        end_time: bookModalSlot.endTime,
+        is_booked: true,
+      })
+      fetchDaySchedule()
+      onUpdate()
+      closeBookModal()
+    } catch (error: unknown) {
+      alert(getApiErrorMessage(error, 'Failed to book slot'))
+    } finally {
+      setBookSubmitting(false)
+    }
+  }
+
+  const handleBookWork = async () => {
+    if (!bookModalSlot || !workSelectedClient || !workSelectedService) return
+    const hasOptions = workSelectedService.options && workSelectedService.options.length > 0
+    if (hasOptions && !workSelectedOption) return
+    setBookSubmitting(true)
+    try {
+      await masterAPI.createAppointmentForClient({
+        user_id: workSelectedClient.id,
+        service_id: workSelectedService.id,
+        service_option_id: workSelectedOption?.id,
+        start_time: bookModalSlot.startTime,
+      })
+      fetchDaySchedule()
+      onUpdate()
+      closeBookModal()
+    } catch (error: unknown) {
+      alert(getApiErrorMessage(error, 'Failed to create appointment'))
+    } finally {
+      setBookSubmitting(false)
     }
   }
 
@@ -1316,30 +1413,298 @@ function MasterCalendar({
               }}>
                 {hourSlots.map((slot, index) => {
                   const colors = statusColors[slot.status]
-                  const canToggle = (slot.status === 'available' || slot.status === 'booked') && services.length > 0
+                  const isBooked = slot.status === 'booked'
+                  const isAppointment = slot.status === 'confirmed' || slot.status === 'pending'
+                  const isAvailable = slot.status === 'available'
+                  const canBook = isAvailable && services.length > 0
                   return (
                     <div
                       key={index}
-                      onClick={() => canToggle && handleToggleSlot(slot)}
                       style={{
                         padding: '0.75rem',
                         backgroundColor: colors.bg,
                         border: `2px solid ${colors.border}`,
                         borderRadius: '4px',
-                        cursor: canToggle ? 'pointer' : 'default',
                         transition: 'all 0.2s',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '0.5rem',
                       }}
                     >
-                      <div style={{ fontWeight: 'bold', fontSize: '0.9rem' }}>
-                        {formatHour(slot.hour)} – {formatHour(slot.hour + 1)}
+                      <div>
+                        <div style={{ fontWeight: 'bold', fontSize: '0.9rem' }}>
+                          {formatHour(slot.hour)} – {formatHour(slot.hour + 1)}
+                        </div>
+                        <div style={{ fontSize: '0.85rem', color: '#333', marginTop: '0.25rem' }}>
+                          {slot.label}
+                        </div>
                       </div>
-                      <div style={{ fontSize: '0.85rem', color: '#333', marginTop: '0.25rem' }}>
-                        {slot.label}
-                      </div>
+                      {isBooked && (
+                        <button
+                          type="button"
+                          onClick={(e) => handleCancelSlot(e, slot)}
+                          style={{
+                            padding: '0.35rem 0.6rem',
+                            fontSize: '0.8rem',
+                            backgroundColor: '#e74c3c',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            alignSelf: 'flex-start',
+                          }}
+                        >
+                          Cancel
+                        </button>
+                      )}
+                      {isAppointment && (
+                        <button
+                          type="button"
+                          onClick={(e) => handleCancelAppointment(e, slot)}
+                          style={{
+                            padding: '0.35rem 0.6rem',
+                            fontSize: '0.8rem',
+                            backgroundColor: '#e74c3c',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            alignSelf: 'flex-start',
+                          }}
+                        >
+                          Cancel
+                        </button>
+                      )}
+                      {canBook && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setBookModalSlot(slot)
+                            setBookModalStep('choice')
+                          }}
+                          style={{
+                            padding: '0.35rem 0.6rem',
+                            fontSize: '0.8rem',
+                            backgroundColor: '#4caf50',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                            alignSelf: 'flex-start',
+                          }}
+                        >
+                          Book
+                        </button>
+                      )}
                     </div>
                   )
                 })}
               </div>
+
+              {bookModalSlot && (
+                <div
+                  style={{
+                    position: 'fixed',
+                    inset: 0,
+                    backgroundColor: 'rgba(0,0,0,0.5)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 1000,
+                  }}
+                  onClick={closeBookModal}
+                >
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    style={{
+                      backgroundColor: 'white',
+                      padding: '1.5rem',
+                      borderRadius: '8px',
+                      minWidth: 320,
+                      maxWidth: 400,
+                      position: 'relative',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                      <h4 style={{ margin: 0 }}>Book slot</h4>
+                      <button
+                        type="button"
+                        onClick={closeBookModal}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          fontSize: '1.5rem',
+                          cursor: 'pointer',
+                          color: '#666',
+                          padding: 0,
+                          lineHeight: 1,
+                        }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                    {bookModalStep === 'choice' ? (
+                      <>
+                        <p style={{ marginBottom: '1rem', color: '#666' }}>
+                          {formatHour(bookModalSlot.hour)} – {formatHour(bookModalSlot.hour + 1)}
+                        </p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                          <button
+                            type="button"
+                            onClick={handleBookForMyself}
+                            disabled={bookSubmitting}
+                            style={{
+                              padding: '0.75rem',
+                              backgroundColor: '#3498db',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              cursor: bookSubmitting ? 'not-allowed' : 'pointer',
+                            }}
+                          >
+                            For myself
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setBookModalStep('work')}
+                            style={{
+                              padding: '0.75rem',
+                              backgroundColor: '#2ecc71',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Work
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <p style={{ marginBottom: '1rem', color: '#666', fontSize: '0.9rem' }}>
+                          Book for client — {formatHour(bookModalSlot.hour)} – {formatHour(bookModalSlot.hour + 1)}
+                        </p>
+                        <div style={{ marginBottom: '1rem' }}>
+                          <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.85rem' }}>Client</label>
+                          <input
+                            type="text"
+                            placeholder="Search by name or email..."
+                            value={workClientSearch}
+                            onChange={(e) => setWorkClientSearch(e.target.value)}
+                            style={{ width: '100%', padding: '0.5rem', marginBottom: '0.25rem' }}
+                          />
+                          {workSearchLoading && <div style={{ fontSize: '0.8rem', color: '#666' }}>Searching...</div>}
+                          {workSearchResults.length > 0 && (
+                            <div style={{ marginTop: '0.25rem', maxHeight: 120, overflowY: 'auto', border: '1px solid #ddd', borderRadius: '4px' }}>
+                              {workSearchResults.map((u) => (
+                                <div
+                                  key={u.id}
+                                  onClick={() => {
+                                    setWorkSelectedClient(u)
+                                    setWorkClientSearch(u.name)
+                                    setWorkSearchResults([])
+                                  }}
+                                  style={{
+                                    padding: '0.5rem',
+                                    cursor: 'pointer',
+                                    backgroundColor: workSelectedClient?.id === u.id ? '#e8f5e9' : 'white',
+                                  }}
+                                >
+                                  {u.name} <span style={{ color: '#666', fontSize: '0.85rem' }}>({u.email})</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {debouncedClientSearch.length >= 2 && !workSearchLoading && workSearchResults.length === 0 && (
+                            <div style={{ fontSize: '0.8rem', color: '#999', marginTop: '0.25rem' }}>
+                              No clients found. Ask them to register first.
+                            </div>
+                          )}
+                        </div>
+                        <div style={{ marginBottom: '1rem' }}>
+                          <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.85rem' }}>Service</label>
+                          <select
+                            value={workSelectedService?.id ?? ''}
+                            onChange={(e) => {
+                              const id = Number(e.target.value)
+                              const s = services.find((sv) => sv.id === id) ?? null
+                              setWorkSelectedService(s)
+                              setWorkSelectedOption(null)
+                            }}
+                            style={{ width: '100%', padding: '0.5rem' }}
+                          >
+                            <option value="">Select service</option>
+                            {services.map((s) => (
+                              <option key={s.id} value={s.id}>{s.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        {workSelectedService?.options && workSelectedService.options.length > 0 && (
+                          <div style={{ marginBottom: '1rem' }}>
+                            <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.85rem' }}>Sub-category</label>
+                            <select
+                              value={workSelectedOption?.id ?? ''}
+                              onChange={(e) => {
+                                const id = Number(e.target.value)
+                                setWorkSelectedOption(workSelectedService.options?.find((o) => o.id === id) ?? null)
+                              }}
+                              style={{ width: '100%', padding: '0.5rem' }}
+                            >
+                              <option value="">Select sub-category</option>
+                              {workSelectedService.options.map((o) => (
+                                <option key={o.id} value={o.id}>{o.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+                        <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                          <button
+                            type="button"
+                            onClick={() => setBookModalStep('choice')}
+                            style={{
+                              padding: '0.5rem 1rem',
+                              backgroundColor: '#ddd',
+                              border: 'none',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Back
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleBookWork}
+                            disabled={
+                              bookSubmitting ||
+                              !workSelectedClient ||
+                              !workSelectedService ||
+                              (!!workSelectedService?.options?.length && !workSelectedOption)
+                            }
+                            style={{
+                              padding: '0.5rem 1rem',
+                              backgroundColor: '#2ecc71',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              cursor:
+                                bookSubmitting ||
+                                !workSelectedClient ||
+                                !workSelectedService ||
+                                (!!workSelectedService?.options?.length && !workSelectedOption)
+                                  ? 'not-allowed'
+                                  : 'pointer',
+                            }}
+                          >
+                            {bookSubmitting ? 'Booking...' : 'Confirm'}
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>

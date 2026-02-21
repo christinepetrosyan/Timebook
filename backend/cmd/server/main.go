@@ -75,6 +75,8 @@ func main() {
 	mux.HandleFunc("PUT /api/v1/master/services/{id}", authMiddleware(masterMiddleware(http.HandlerFunc(h.UpdateService))).ServeHTTP)
 	mux.HandleFunc("DELETE /api/v1/master/services/{id}", authMiddleware(masterMiddleware(http.HandlerFunc(h.DeleteService))).ServeHTTP)
 	mux.HandleFunc("GET /api/v1/master/appointments", authMiddleware(masterMiddleware(http.HandlerFunc(h.GetMasterAppointments))).ServeHTTP)
+	mux.HandleFunc("POST /api/v1/master/appointments", authMiddleware(masterMiddleware(http.HandlerFunc(h.CreateAppointmentForClient))).ServeHTTP)
+	mux.HandleFunc("GET /api/v1/master/users/search", authMiddleware(masterMiddleware(http.HandlerFunc(h.SearchUsers))).ServeHTTP)
 	mux.HandleFunc("PUT /api/v1/master/appointments/{id}/confirm", authMiddleware(masterMiddleware(http.HandlerFunc(h.ConfirmAppointment))).ServeHTTP)
 	mux.HandleFunc("PUT /api/v1/master/appointments/{id}/reject", authMiddleware(masterMiddleware(http.HandlerFunc(h.RejectAppointment))).ServeHTTP)
 
@@ -97,6 +99,8 @@ func main() {
 	mux.HandleFunc("PUT /api/master/services/{id}", authMiddleware(masterMiddleware(http.HandlerFunc(h.UpdateService))).ServeHTTP)
 	mux.HandleFunc("DELETE /api/master/services/{id}", authMiddleware(masterMiddleware(http.HandlerFunc(h.DeleteService))).ServeHTTP)
 	mux.HandleFunc("GET /api/master/appointments", authMiddleware(masterMiddleware(http.HandlerFunc(h.GetMasterAppointments))).ServeHTTP)
+	mux.HandleFunc("POST /api/master/appointments", authMiddleware(masterMiddleware(http.HandlerFunc(h.CreateAppointmentForClient))).ServeHTTP)
+	mux.HandleFunc("GET /api/master/users/search", authMiddleware(masterMiddleware(http.HandlerFunc(h.SearchUsers))).ServeHTTP)
 	mux.HandleFunc("PUT /api/master/appointments/{id}/confirm", authMiddleware(masterMiddleware(http.HandlerFunc(h.ConfirmAppointment))).ServeHTTP)
 	mux.HandleFunc("PUT /api/master/appointments/{id}/reject", authMiddleware(masterMiddleware(http.HandlerFunc(h.RejectAppointment))).ServeHTTP)
 	mux.HandleFunc("POST /api/master/time-slots", authMiddleware(masterMiddleware(http.HandlerFunc(h.CreateTimeSlot))).ServeHTTP)

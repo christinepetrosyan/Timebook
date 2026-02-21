@@ -434,3 +434,117 @@ func (h *Handlers) RejectAppointment(w http.ResponseWriter, r *http.Request) {
 
 	respondWithJSON(w, http.StatusOK, rejectedAppointment)
 }
+
+// CreateAppointmentForClient allows a master to create an appointment on behalf of a client.
+// Used for the "Work" flow when booking from the master calendar.
+func (h *Handlers) CreateAppointmentForClient(w http.ResponseWriter, r *http.Request) {
+	masterUserID, ok := getContextUserID(w, r)
+	if !ok {
+		return
+	}
+
+	var masterProfile models.MasterProfile
+	if err := h.DB.Where("user_id = ?", masterUserID).First(&masterProfile).Error; err != nil {
+		respondWithError(w, http.StatusNotFound, "Master profile not found")
+		return
+	}
+
+	var req struct {
+		UserID          uint   `json:"user_id"`
+		ServiceID       uint   `json:"service_id"`
+		ServiceOptionID *uint  `json:"service_option_id,omitempty"`
+		StartTime       string `json:"start_time"`
+		Notes           string `json:"notes"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	// Verify service belongs to this master
+	var service models.Service
+	if err := h.DB.Preload("Master").Preload("Options").Where("id = ? AND master_id = ?", req.ServiceID, masterProfile.ID).First(&service).Error; err != nil {
+		respondWithError(w, http.StatusNotFound, "Service not found")
+		return
+	}
+
+	// Verify client user exists and has role "user"
+	var client models.User
+	if err := h.DB.Where("id = ? AND role = ?", req.UserID, models.RoleUser).First(&client).Error; err != nil {
+		respondWithError(w, http.StatusNotFound, "Client not found")
+		return
+	}
+
+	duration := service.Duration
+	if len(service.Options) > 0 {
+		if req.ServiceOptionID == nil {
+			respondWithError(w, http.StatusBadRequest, "This service has sub-categories. Please select one.")
+			return
+		}
+		var option models.ServiceOption
+		if err := h.DB.Where("id = ? AND service_id = ?", *req.ServiceOptionID, req.ServiceID).First(&option).Error; err != nil {
+			respondWithError(w, http.StatusNotFound, "Service sub-category not found")
+			return
+		}
+		duration = option.Duration
+	}
+
+	startTime, err := parseTime(req.StartTime)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid time format")
+		return
+	}
+
+	endTime := startTime.Add(minutesToDuration(duration))
+
+	// Check for conflicts (master-wide: any overlapping appointment blocks the slot)
+	var conflictingAppointment models.Appointment
+	if err := h.DB.Where(
+		"master_id = ? AND deleted_at IS NULL AND status IN (?, ?) AND start_time < ? AND end_time > ?",
+		masterProfile.ID,
+		models.StatusPending,
+		models.StatusConfirmed,
+		endTime, startTime,
+	).First(&conflictingAppointment).Error; err == nil {
+		respondWithError(w, http.StatusConflict, "Time slot conflicts with existing appointment")
+		return
+	}
+
+	// Mark matching time slot as booked if it exists
+	var timeSlot models.TimeSlot
+	if err := h.DB.Where(
+		"master_id = ? AND service_id = ? AND start_time = ? AND end_time = ? AND is_booked = ? AND deleted_at IS NULL",
+		masterProfile.ID,
+		req.ServiceID,
+		startTime,
+		endTime,
+		false,
+	).First(&timeSlot).Error; err == nil {
+		timeSlot.IsBooked = true
+		h.DB.Save(&timeSlot)
+	}
+
+	appointment := models.Appointment{
+		UserID:          req.UserID,
+		MasterID:        masterProfile.ID,
+		ServiceID:       req.ServiceID,
+		ServiceOptionID: req.ServiceOptionID,
+		StartTime:       startTime,
+		EndTime:         endTime,
+		Status:          models.StatusConfirmed, // Master-created appointments are auto-confirmed
+		Notes:           req.Notes,
+	}
+
+	if err := h.DB.Create(&appointment).Error; err != nil {
+		if timeSlot.ID != 0 {
+			timeSlot.IsBooked = false
+			h.DB.Save(&timeSlot)
+		}
+		respondWithError(w, http.StatusInternalServerError, "Failed to create appointment")
+		return
+	}
+
+	h.DB.Preload("Service").Preload("Master").Preload("User").Preload("ServiceOption").First(&appointment, appointment.ID)
+	respondWithJSON(w, http.StatusCreated, appointment)
+}
