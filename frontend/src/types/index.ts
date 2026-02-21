@@ -57,6 +57,7 @@ export interface TimeSlot {
   end_time: string
   is_booked: boolean
   available?: boolean // Computed field for display
+  is_past?: boolean // Slot has already ended
   service?: Service
   master?: MasterProfile
 }

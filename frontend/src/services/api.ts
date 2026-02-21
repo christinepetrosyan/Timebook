@@ -139,6 +139,22 @@ export const masterAPI = {
     return response.data
   },
 
+  searchUsers: async (query: string): Promise<User[]> => {
+    const response = await api.get<User[]>(`/master/users/search?q=${encodeURIComponent(query)}`)
+    return response.data
+  },
+
+  createAppointmentForClient: async (data: {
+    user_id: number
+    service_id: number
+    service_option_id?: number
+    start_time: string
+    notes?: string
+  }): Promise<Appointment> => {
+    const response = await api.post<Appointment>('/master/appointments', data)
+    return response.data
+  },
+
   // Time slot management
   createTimeSlot: async (data: {
     service_id: number

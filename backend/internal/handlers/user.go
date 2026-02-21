@@ -56,73 +56,78 @@ func (h *Handlers) GetAvailableSlots(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get date range from query params (default to next 7 days)
 	now := time.Now()
 	startDate := now
-	endDate := now.AddDate(0, 0, 7)
+	endDate := now.AddDate(0, 0, 1)
 
-	if startDateStr := r.URL.Query().Get("start_date"); startDateStr != "" {
-		if t, err := parseTime(startDateStr); err == nil {
+	if s := r.URL.Query().Get("start_date"); s != "" {
+		if t, err := parseTime(s); err == nil {
 			startDate = t
 		}
 	}
-
-	if endDateStr := r.URL.Query().Get("end_date"); endDateStr != "" {
-		if t, err := parseTime(endDateStr); err == nil {
+	if s := r.URL.Query().Get("end_date"); s != "" {
+		if t, err := parseTime(s); err == nil {
 			endDate = t
 		}
 	}
 
-	// Only show slots that the master has actually created for this service.
-	// Filter out degenerate slots where start_time == end_time (caused by
-	// 0-duration services with subcategories).
-	var existingSlots []models.TimeSlot
-	if err := h.DB.Where(
-		"service_id = ? AND deleted_at IS NULL AND start_time >= ? AND end_time <= ? AND start_time < end_time",
-		serviceID,
-		startDate,
-		endDate,
-	).Order("start_time ASC").Find(&existingSlots).Error; err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Failed to fetch time slots")
-		return
-	}
+	// Fetch ALL booked DB time slots for this master (unified calendar —
+	// a slot blocked on any service blocks the hour for every service).
+	var bookedDbSlots []models.TimeSlot
+	h.DB.Where(
+		"master_id = ? AND deleted_at IS NULL AND is_booked = ? AND start_time < ? AND end_time > ?",
+		service.MasterID, true, endDate, startDate,
+	).Find(&bookedDbSlots)
 
-	// Fetch pending/confirmed appointments across ALL services for this master
-	// (unified calendar: a booking on any service blocks the time).
-	// Use overlap query: appointment overlaps the window if apt.start < endDate AND apt.end > startDate
+	// Fetch pending/confirmed appointments for this master (all services).
 	var appointments []models.Appointment
 	h.DB.Where(
 		"master_id = ? AND deleted_at IS NULL AND status IN (?, ?) AND start_time < ? AND end_time > ?",
-		service.MasterID,
-		models.StatusPending,
-		models.StatusConfirmed,
-		endDate,
-		startDate,
+		service.MasterID, models.StatusPending, models.StatusConfirmed, endDate, startDate,
 	).Find(&appointments)
 
-	// Mark each slot as booked if ANY appointment overlaps its time range
-	for i := range existingSlots {
-		slotStart := existingSlots[i].StartTime
-		slotEnd := existingSlots[i].EndTime
-		for _, apt := range appointments {
-			if apt.StartTime.Before(slotEnd) && apt.EndTime.After(slotStart) {
-				existingSlots[i].IsBooked = true
+	// Generate 1-hour working-hour slots (8 AM – 10 PM in the client's
+	// local timezone). The frontend sends startDate as local-midnight
+	// expressed in UTC, so startDate + 8 h = 8 AM local.
+	workStart := startDate.Add(8 * time.Hour)
+
+	slots := []map[string]interface{}{}
+	for hour := 0; hour < 14; hour++ {
+		slotStart := workStart.Add(time.Duration(hour) * time.Hour)
+		slotEnd := slotStart.Add(time.Hour)
+
+		// Mark past slots as unavailable; always return them so the grid is complete.
+		isPast := slotEnd.Before(now)
+
+		isBooked := false
+
+		// Check master-wide booked DB slots (manually blocked by master).
+		for _, dbSlot := range bookedDbSlots {
+			if dbSlot.StartTime.Before(slotEnd) && dbSlot.EndTime.After(slotStart) {
+				isBooked = true
 				break
 			}
 		}
-	}
 
-	// Convert to response format
-	slots := make([]map[string]interface{}, len(existingSlots))
-	for i, slot := range existingSlots {
-		slots[i] = map[string]interface{}{
-			"id":         slot.ID,
-			"service_id": slot.ServiceID,
-			"start_time": slot.StartTime.Format(time.RFC3339),
-			"end_time":   slot.EndTime.Format(time.RFC3339),
-			"available":  !slot.IsBooked,
-			"is_booked":  slot.IsBooked,
+		// Check appointments (pending or confirmed on any service).
+		if !isBooked {
+			for _, apt := range appointments {
+				if apt.StartTime.Before(slotEnd) && apt.EndTime.After(slotStart) {
+					isBooked = true
+					break
+				}
+			}
 		}
+
+		slots = append(slots, map[string]interface{}{
+			"id":         0,
+			"service_id": serviceID,
+			"start_time": slotStart.Format(time.RFC3339),
+			"end_time":   slotEnd.Format(time.RFC3339),
+			"available":  !isBooked && !isPast,
+			"is_booked":  isBooked,
+			"is_past":    isPast,
+		})
 	}
 
 	respondWithJSON(w, http.StatusOK, slots)
