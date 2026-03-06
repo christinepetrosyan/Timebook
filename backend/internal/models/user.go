@@ -25,6 +25,7 @@ type User struct {
 	Name     string   `gorm:"not null" json:"name"`
 	Role     UserRole `gorm:"type:varchar(20);not null;default:'user'" json:"role"`
 	Phone    string   `json:"phone"`
+	IsGuest  bool     `gorm:"not null;default:false" json:"is_guest"`
 
 	// Master-specific fields
 	MasterProfile *MasterProfile `gorm:"foreignKey:UserID" json:"master_profile,omitempty"`

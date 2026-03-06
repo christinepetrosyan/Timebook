@@ -39,6 +39,9 @@ func main() {
 	// Health check (no versioning)
 	mux.HandleFunc("GET /health", h.HealthCheck)
 
+	// Telegram webhook (public - Telegram sends here)
+	mux.HandleFunc("POST /api/telegram/webhook", h.TelegramWebhook)
+
 	// API v1 routes
 	// Public routes
 	mux.HandleFunc("POST /api/v1/auth/register", h.Register)
@@ -60,11 +63,17 @@ func main() {
 
 	// User routes (protected) - v1
 	mux.HandleFunc("GET /api/v1/user/profile", authMiddleware(userMiddleware(http.HandlerFunc(h.GetUserProfile))).ServeHTTP)
+	mux.HandleFunc("GET /api/v1/user/notification-preferences", authMiddleware(http.HandlerFunc(h.GetNotificationPreferences)).ServeHTTP)
+	mux.HandleFunc("PUT /api/v1/user/notification-preferences", authMiddleware(http.HandlerFunc(h.UpdateNotificationPreferences)).ServeHTTP)
+	mux.HandleFunc("GET /api/v1/user/telegram/link", authMiddleware(http.HandlerFunc(h.GetTelegramLink)).ServeHTTP)
 	mux.HandleFunc("POST /api/v1/appointments", authMiddleware(userMiddleware(http.HandlerFunc(h.CreateAppointment))).ServeHTTP)
 	mux.HandleFunc("GET /api/v1/appointments", authMiddleware(userMiddleware(http.HandlerFunc(h.GetAppointments))).ServeHTTP)
 
 	// Legacy user routes (backward compatibility)
 	mux.HandleFunc("GET /api/user/profile", authMiddleware(userMiddleware(http.HandlerFunc(h.GetUserProfile))).ServeHTTP)
+	mux.HandleFunc("GET /api/user/notification-preferences", authMiddleware(http.HandlerFunc(h.GetNotificationPreferences)).ServeHTTP)
+	mux.HandleFunc("PUT /api/user/notification-preferences", authMiddleware(http.HandlerFunc(h.UpdateNotificationPreferences)).ServeHTTP)
+	mux.HandleFunc("GET /api/user/telegram/link", authMiddleware(http.HandlerFunc(h.GetTelegramLink)).ServeHTTP)
 	mux.HandleFunc("POST /api/appointments", authMiddleware(userMiddleware(http.HandlerFunc(h.CreateAppointment))).ServeHTTP)
 	mux.HandleFunc("GET /api/appointments", authMiddleware(userMiddleware(http.HandlerFunc(h.GetAppointments))).ServeHTTP)
 

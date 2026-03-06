@@ -59,6 +59,26 @@ func (h *Handlers) AdminConfirmAppointment(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// Send notification to client
+	if h.Notifier != nil {
+		h.DB.Preload("User").Preload("Service").Preload("Master").Preload("Master.User").First(confirmedAppointment, confirmedAppointment.ID)
+		if confirmedAppointment.User.ID != 0 {
+			pref, _ := h.Notifier.GetOrCreatePreferences(confirmedAppointment.User.ID)
+			masterName := ""
+			if confirmedAppointment.Master.ID != 0 && confirmedAppointment.Master.User.Name != "" {
+				masterName = confirmedAppointment.Master.User.Name
+			}
+			body := "Your appointment has been confirmed."
+			if confirmedAppointment.Service.ID != 0 {
+				body = "Your appointment for " + confirmedAppointment.Service.Name + " has been confirmed."
+			}
+			if masterName != "" {
+				body += " Master: " + masterName + "."
+			}
+			h.Notifier.SendAppointmentNotification(&confirmedAppointment.User, "Appointment Confirmed", body, pref)
+		}
+	}
+
 	respondWithJSON(w, http.StatusOK, confirmedAppointment)
 }
 
@@ -81,6 +101,19 @@ func (h *Handlers) AdminRejectAppointment(w http.ResponseWriter, r *http.Request
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Failed to reject appointment")
 		return
+	}
+
+	// Send notification to client
+	if h.Notifier != nil {
+		h.DB.Preload("User").Preload("Service").Preload("Master").Preload("Master.User").First(rejectedAppointment, rejectedAppointment.ID)
+		if rejectedAppointment.User.ID != 0 {
+			pref, _ := h.Notifier.GetOrCreatePreferences(rejectedAppointment.User.ID)
+			body := "Your appointment has been declined."
+			if rejectedAppointment.Service.ID != 0 {
+				body = "Your appointment for " + rejectedAppointment.Service.Name + " has been declined."
+			}
+			h.Notifier.SendAppointmentNotification(&rejectedAppointment.User, "Appointment Declined", body, pref)
+		}
 	}
 
 	respondWithJSON(w, http.StatusOK, rejectedAppointment)

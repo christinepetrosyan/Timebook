@@ -51,7 +51,38 @@ func (h *Handlers) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user := models.User{
+	// Check for existing guest user (claim flow)
+	var user models.User
+	if err := h.DB.Where("email = ?", req.Email).First(&user).Error; err == nil {
+		if user.IsGuest {
+			// Claim: update password and convert to full user
+			user.Password = string(hashedPassword)
+			user.Name = req.Name
+			if req.Phone != "" {
+				user.Phone = req.Phone
+			}
+			user.IsGuest = false
+			if err := h.DB.Save(&user).Error; err != nil {
+				respondWithError(w, http.StatusInternalServerError, "Failed to claim account")
+				return
+			}
+			// Generate token and return (skip master profile creation for claimed users)
+			token, err := generateToken(user, h.Config.JWTSecret)
+			if err != nil {
+				respondWithError(w, http.StatusInternalServerError, "Failed to generate token")
+				return
+			}
+			user.Password = ""
+			respondWithJSON(w, http.StatusOK, AuthResponse{Token: token, User: user})
+			return
+		}
+		// Email already taken by non-guest user
+		respondWithError(w, http.StatusBadRequest, "Email already registered")
+		return
+	}
+
+	// New user
+	user = models.User{
 		Email:    req.Email,
 		Password: string(hashedPassword),
 		Name:     req.Name,

@@ -6,6 +6,7 @@ export interface User {
   name: string
   role: UserRole
   phone?: string
+  is_guest?: boolean
   created_at: string
   updated_at: string
 }
@@ -74,5 +75,17 @@ export interface ServiceOption {
 export interface AuthResponse {
   token: string
   user: User
+}
+
+export interface NotificationPreferences {
+  id: number
+  user_id: number
+  email_enabled: boolean
+  whatsapp_enabled: boolean
+  whatsapp_phone?: string
+  telegram_enabled: boolean
+  telegram_chat_id?: string
+  viber_enabled: boolean
+  viber_user_id?: string
 }
 

@@ -425,7 +425,7 @@ export default function ServiceCard({ service, onBookingSuccess }: ServiceCardPr
                     {timeSlots.map((slot, index) => {
                       const isAvailable = slot.available === true
                       const isChosen = selectedSlot?.start_time === slot.start_time
-                      const statusLabel = isAvailable ? 'Available' : (slot.is_past ? 'Past' : 'Booked')
+                      const statusLabel = isAvailable ? 'Available' : (slot.is_past ? 'Past' : 'Booked for')
                       return (
                         <div
                           key={index}

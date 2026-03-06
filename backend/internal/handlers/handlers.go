@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/timebook/backend/internal/config"
+	"github.com/timebook/backend/internal/notifications"
 	"github.com/timebook/backend/internal/repositories"
 	"github.com/timebook/backend/internal/services"
 	"github.com/timebook/backend/internal/transaction"
@@ -16,6 +17,7 @@ type Handlers struct {
 	Config             *config.Config
 	AppointmentService *services.AppointmentService
 	MasterService      *services.MasterService
+	Notifier           *notifications.Dispatcher
 }
 
 func New(db *gorm.DB, cfg *config.Config) *Handlers {
@@ -31,11 +33,29 @@ func New(db *gorm.DB, cfg *config.Config) *Handlers {
 	appointmentService := services.NewAppointmentService(appointmentRepo, timeslotRepo, txManager)
 	masterService := services.NewMasterService(masterRepo, txManager)
 
+	// Initialize notification providers
+	emailProvider := &notifications.EmailProvider{
+		Host: cfg.SMTPHost,
+		Port: cfg.SMTPPort,
+		User: cfg.SMTPUser,
+		Pass: cfg.SMTPPass,
+		From: cfg.SMTPFrom,
+	}
+	telegramProvider := &notifications.TelegramProvider{BotToken: cfg.TelegramBotToken}
+	whatsappProvider := &notifications.WhatsAppProvider{
+		AccessToken:   cfg.WhatsAppAccessToken,
+		PhoneNumberID: cfg.WhatsAppPhoneNumberID,
+	}
+	viberProvider := &notifications.ViberProvider{AuthToken: cfg.ViberAuthToken}
+
+	notifier := notifications.NewDispatcher(db, emailProvider, telegramProvider, whatsappProvider, viberProvider)
+
 	return &Handlers{
 		DB:                 db,
 		Config:             cfg,
 		AppointmentService: appointmentService,
 		MasterService:      masterService,
+		Notifier:           notifier,
 	}
 }
 

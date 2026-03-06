@@ -1153,6 +1153,10 @@ function MasterCalendar({
   const [bookModalStep, setBookModalStep] = useState<'choice' | 'work'>('choice')
   const [workClientSearch, setWorkClientSearch] = useState('')
   const [workSelectedClient, setWorkSelectedClient] = useState<User | null>(null)
+  const [workGuestMode, setWorkGuestMode] = useState(false)
+  const [workGuestName, setWorkGuestName] = useState('')
+  const [workGuestEmail, setWorkGuestEmail] = useState('')
+  const [workGuestPhone, setWorkGuestPhone] = useState('')
   const [workSelectedService, setWorkSelectedService] = useState<Service | null>(null)
   const [workSelectedOption, setWorkSelectedOption] = useState<ServiceOption | null>(null)
   const [workSearchResults, setWorkSearchResults] = useState<User[]>([])
@@ -1309,6 +1313,10 @@ function MasterCalendar({
     setBookModalStep('choice')
     setWorkClientSearch('')
     setWorkSelectedClient(null)
+    setWorkGuestMode(false)
+    setWorkGuestName('')
+    setWorkGuestEmail('')
+    setWorkGuestPhone('')
     setWorkSelectedService(null)
     setWorkSelectedOption(null)
     setWorkSearchResults([])
@@ -1338,17 +1346,32 @@ function MasterCalendar({
   }
 
   const handleBookWork = async () => {
-    if (!bookModalSlot || !workSelectedClient || !workSelectedService) return
+    if (!bookModalSlot || !workSelectedService) return
     const hasOptions = workSelectedService.options && workSelectedService.options.length > 0
     if (hasOptions && !workSelectedOption) return
+    const hasClient = workGuestMode
+      ? workGuestName.trim() && workGuestEmail.trim()
+      : !!workSelectedClient
+    if (!hasClient) return
     setBookSubmitting(true)
     try {
-      await masterAPI.createAppointmentForClient({
-        user_id: workSelectedClient.id,
-        service_id: workSelectedService.id,
-        service_option_id: workSelectedOption?.id,
-        start_time: bookModalSlot.startTime,
-      })
+      if (workGuestMode) {
+        await masterAPI.createAppointmentForClient({
+          guest_name: workGuestName.trim(),
+          guest_email: workGuestEmail.trim(),
+          guest_phone: workGuestPhone.trim() || undefined,
+          service_id: workSelectedService.id,
+          service_option_id: workSelectedOption?.id,
+          start_time: bookModalSlot.startTime,
+        })
+      } else {
+        await masterAPI.createAppointmentForClient({
+          user_id: workSelectedClient!.id,
+          service_id: workSelectedService.id,
+          service_option_id: workSelectedOption?.id,
+          start_time: bookModalSlot.startTime,
+        })
+      }
       fetchDaySchedule()
       onUpdate()
       closeBookModal()
@@ -1588,39 +1611,101 @@ function MasterCalendar({
                         </p>
                         <div style={{ marginBottom: '1rem' }}>
                           <label style={{ display: 'block', marginBottom: '0.25rem', fontSize: '0.85rem' }}>Client</label>
-                          <input
-                            type="text"
-                            placeholder="Search by name or email..."
-                            value={workClientSearch}
-                            onChange={(e) => setWorkClientSearch(e.target.value)}
-                            style={{ width: '100%', padding: '0.5rem', marginBottom: '0.25rem' }}
-                          />
-                          {workSearchLoading && <div style={{ fontSize: '0.8rem', color: '#666' }}>Searching...</div>}
-                          {workSearchResults.length > 0 && (
-                            <div style={{ marginTop: '0.25rem', maxHeight: 120, overflowY: 'auto', border: '1px solid #ddd', borderRadius: '4px' }}>
-                              {workSearchResults.map((u) => (
-                                <div
-                                  key={u.id}
-                                  onClick={() => {
-                                    setWorkSelectedClient(u)
-                                    setWorkClientSearch(u.name)
-                                    setWorkSearchResults([])
-                                  }}
-                                  style={{
-                                    padding: '0.5rem',
-                                    cursor: 'pointer',
-                                    backgroundColor: workSelectedClient?.id === u.id ? '#e8f5e9' : 'white',
-                                  }}
-                                >
-                                  {u.name} <span style={{ color: '#666', fontSize: '0.85rem' }}>({u.email})</span>
+                          {workGuestMode ? (
+                            <>
+                              <input
+                                type="text"
+                                placeholder="Name *"
+                                value={workGuestName}
+                                onChange={(e) => setWorkGuestName(e.target.value)}
+                                style={{ width: '100%', padding: '0.5rem', marginBottom: '0.5rem' }}
+                              />
+                              <input
+                                type="email"
+                                placeholder="Email *"
+                                value={workGuestEmail}
+                                onChange={(e) => setWorkGuestEmail(e.target.value)}
+                                style={{ width: '100%', padding: '0.5rem', marginBottom: '0.5rem' }}
+                              />
+                              <input
+                                type="tel"
+                                placeholder="Phone (optional)"
+                                value={workGuestPhone}
+                                onChange={(e) => setWorkGuestPhone(e.target.value)}
+                                style={{ width: '100%', padding: '0.5rem', marginBottom: '0.25rem' }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setWorkGuestMode(false)
+                                  setWorkGuestName('')
+                                  setWorkGuestEmail('')
+                                  setWorkGuestPhone('')
+                                }}
+                                style={{
+                                  fontSize: '0.8rem',
+                                  background: 'none',
+                                  border: 'none',
+                                  color: '#3498db',
+                                  cursor: 'pointer',
+                                  padding: 0,
+                                }}
+                              >
+                                Search existing client instead
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <input
+                                type="text"
+                                placeholder="Search by name or email..."
+                                value={workClientSearch}
+                                onChange={(e) => setWorkClientSearch(e.target.value)}
+                                style={{ width: '100%', padding: '0.5rem', marginBottom: '0.25rem' }}
+                              />
+                              {workSearchLoading && <div style={{ fontSize: '0.8rem', color: '#666' }}>Searching...</div>}
+                              {workSearchResults.length > 0 && (
+                                <div style={{ marginTop: '0.25rem', maxHeight: 120, overflowY: 'auto', border: '1px solid #ddd', borderRadius: '4px' }}>
+                                  {workSearchResults.map((u) => (
+                                    <div
+                                      key={u.id}
+                                      onClick={() => {
+                                        setWorkSelectedClient(u)
+                                        setWorkClientSearch(u.name)
+                                        setWorkSearchResults([])
+                                      }}
+                                      style={{
+                                        padding: '0.5rem',
+                                        cursor: 'pointer',
+                                        backgroundColor: workSelectedClient?.id === u.id ? '#e8f5e9' : 'white',
+                                      }}
+                                    >
+                                      {u.name} <span style={{ color: '#666', fontSize: '0.85rem' }}>({u.email})</span>
+                                    </div>
+                                  ))}
                                 </div>
-                              ))}
-                            </div>
-                          )}
-                          {debouncedClientSearch.length >= 2 && !workSearchLoading && workSearchResults.length === 0 && (
-                            <div style={{ fontSize: '0.8rem', color: '#999', marginTop: '0.25rem' }}>
-                              No clients found. Ask them to register first.
-                            </div>
+                              )}
+                              {debouncedClientSearch.length >= 2 && !workSearchLoading && workSearchResults.length === 0 && (
+                                <div style={{ fontSize: '0.8rem', color: '#999', marginTop: '0.25rem' }}>
+                                  No clients found.
+                                </div>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => setWorkGuestMode(true)}
+                                style={{
+                                  fontSize: '0.8rem',
+                                  marginTop: '0.5rem',
+                                  background: 'none',
+                                  border: 'none',
+                                  color: '#3498db',
+                                  cursor: 'pointer',
+                                  padding: 0,
+                                }}
+                              >
+                                Or book for new guest
+                              </button>
+                            </>
                           )}
                         </div>
                         <div style={{ marginBottom: '1rem' }}>
@@ -1678,9 +1763,9 @@ function MasterCalendar({
                             onClick={handleBookWork}
                             disabled={
                               bookSubmitting ||
-                              !workSelectedClient ||
                               !workSelectedService ||
-                              (!!workSelectedService?.options?.length && !workSelectedOption)
+                              (!!workSelectedService?.options?.length && !workSelectedOption) ||
+                              (workGuestMode ? !(workGuestName.trim() && workGuestEmail.trim()) : !workSelectedClient)
                             }
                             style={{
                               padding: '0.5rem 1rem',
@@ -1690,9 +1775,9 @@ function MasterCalendar({
                               borderRadius: '4px',
                               cursor:
                                 bookSubmitting ||
-                                !workSelectedClient ||
                                 !workSelectedService ||
-                                (!!workSelectedService?.options?.length && !workSelectedOption)
+                                (!!workSelectedService?.options?.length && !workSelectedOption) ||
+                                (workGuestMode ? !(workGuestName.trim() && workGuestEmail.trim()) : !workSelectedClient)
                                   ? 'not-allowed'
                                   : 'pointer',
                             }}

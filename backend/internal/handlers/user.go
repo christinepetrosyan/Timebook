@@ -2,7 +2,10 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/timebook/backend/internal/models"
@@ -252,4 +255,181 @@ func (h *Handlers) GetAppointments(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondWithJSON(w, http.StatusOK, appointments)
+}
+
+func (h *Handlers) GetNotificationPreferences(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value("user_id").(uint)
+
+	if h.Notifier == nil {
+		respondWithError(w, http.StatusInternalServerError, "Notifications not configured")
+		return
+	}
+
+	pref, err := h.Notifier.GetOrCreatePreferences(userID)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Failed to fetch preferences")
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, pref)
+}
+
+func (h *Handlers) UpdateNotificationPreferences(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value("user_id").(uint)
+
+	if h.Notifier == nil {
+		respondWithError(w, http.StatusInternalServerError, "Notifications not configured")
+		return
+	}
+
+	var req struct {
+		EmailEnabled    *bool   `json:"email_enabled"`
+		WhatsAppEnabled *bool   `json:"whatsapp_enabled"`
+		WhatsAppPhone   *string `json:"whatsapp_phone"`
+		TelegramEnabled *bool   `json:"telegram_enabled"`
+		TelegramChatID  *string `json:"telegram_chat_id"`
+		ViberEnabled    *bool   `json:"viber_enabled"`
+		ViberUserID     *string `json:"viber_user_id"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	pref, err := h.Notifier.GetOrCreatePreferences(userID)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Failed to fetch preferences")
+		return
+	}
+
+	if req.EmailEnabled != nil {
+		pref.EmailEnabled = *req.EmailEnabled
+	}
+	if req.WhatsAppEnabled != nil {
+		pref.WhatsAppEnabled = *req.WhatsAppEnabled
+	}
+	if req.WhatsAppPhone != nil {
+		pref.WhatsAppPhone = *req.WhatsAppPhone
+	}
+	if req.TelegramEnabled != nil {
+		pref.TelegramEnabled = *req.TelegramEnabled
+	}
+	if req.TelegramChatID != nil {
+		pref.TelegramChatID = *req.TelegramChatID
+	}
+	if req.ViberEnabled != nil {
+		pref.ViberEnabled = *req.ViberEnabled
+	}
+	if req.ViberUserID != nil {
+		pref.ViberUserID = *req.ViberUserID
+	}
+
+	if err := h.DB.Save(pref).Error; err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Failed to update preferences")
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, pref)
+}
+
+// GetTelegramLink returns the bot link for the authenticated user to link their Telegram account
+func (h *Handlers) GetTelegramLink(w http.ResponseWriter, r *http.Request) {
+	userID := r.Context().Value("user_id").(uint)
+
+	username := h.Config.TelegramBotUsername
+	if username == "" && h.Config.TelegramBotToken != "" {
+		// Try to fetch from getMe
+		var resp struct {
+			OK     bool `json:"ok"`
+			Result struct {
+				Username string `json:"username"`
+			} `json:"result"`
+		}
+		url := fmt.Sprintf("https://api.telegram.org/bot%s/getMe", h.Config.TelegramBotToken)
+		req, _ := http.NewRequest("GET", url, nil)
+		client := &http.Client{}
+		res, err := client.Do(req)
+		if err == nil && res.StatusCode == 200 {
+			_ = json.NewDecoder(res.Body).Decode(&resp)
+			res.Body.Close()
+			if resp.OK && resp.Result.Username != "" {
+				username = resp.Result.Username
+			}
+		}
+	}
+	if username == "" {
+		respondWithError(w, http.StatusServiceUnavailable, "Telegram bot not configured")
+		return
+	}
+
+	botLink := fmt.Sprintf("https://t.me/%s?start=%d", username, userID)
+	respondWithJSON(w, http.StatusOK, map[string]string{"bot_link": botLink})
+}
+
+// telegramUpdate represents the minimal structure of a Telegram webhook update
+type telegramUpdate struct {
+	Message *struct {
+		Chat struct {
+			ID int64 `json:"id"`
+		} `json:"chat"`
+		Text string `json:"text"`
+	} `json:"message"`
+}
+
+// TelegramWebhook handles incoming Telegram bot updates (no auth - Telegram sends here)
+func (h *Handlers) TelegramWebhook(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	if h.Config.TelegramBotToken == "" || h.Notifier == nil {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	var update telegramUpdate
+	if err := json.NewDecoder(r.Body).Decode(&update); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	if update.Message == nil || update.Message.Text == "" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	text := strings.TrimSpace(update.Message.Text)
+	chatID := update.Message.Chat.ID
+
+	// /start USER_ID - link account
+	if strings.HasPrefix(text, "/start") {
+		parts := strings.Fields(text)
+		var userIDStr string
+		if len(parts) >= 2 {
+			userIDStr = parts[1]
+		}
+		if userIDStr == "" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		userID, err := strconv.ParseUint(userIDStr, 10, 32)
+		if err != nil {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		pref, err := h.Notifier.GetOrCreatePreferences(uint(userID))
+		if err != nil {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		pref.TelegramEnabled = true
+		pref.TelegramChatID = fmt.Sprintf("%d", chatID)
+		if err := h.DB.Save(pref).Error; err != nil {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+	}
+
+	w.WriteHeader(http.StatusOK)
 }

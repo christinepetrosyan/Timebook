@@ -1,5 +1,5 @@
 import axios from 'axios'
-import type { AuthResponse, User, Service, Appointment, TimeSlot, MasterProfile, ServiceOption } from '../types'
+import type { AuthResponse, User, Service, Appointment, TimeSlot, MasterProfile, ServiceOption, NotificationPreferences } from '../types'
 
 // Use relative URL in production (via nginx proxy) or absolute URL in development
 const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? '/api' : 'http://localhost:8080/api')
@@ -86,6 +86,21 @@ export const userAPI = {
     const response = await api.get<Appointment[]>('/appointments')
     return response.data
   },
+
+  getNotificationPreferences: async (): Promise<NotificationPreferences> => {
+    const response = await api.get<NotificationPreferences>('/user/notification-preferences')
+    return response.data
+  },
+
+  updateNotificationPreferences: async (data: Partial<NotificationPreferences>): Promise<NotificationPreferences> => {
+    const response = await api.put<NotificationPreferences>('/user/notification-preferences', data)
+    return response.data
+  },
+
+  getTelegramLink: async (): Promise<{ bot_link: string }> => {
+    const response = await api.get<{ bot_link: string }>('/user/telegram/link')
+    return response.data
+  },
 }
 
 // Master API
@@ -145,7 +160,10 @@ export const masterAPI = {
   },
 
   createAppointmentForClient: async (data: {
-    user_id: number
+    user_id?: number
+    guest_name?: string
+    guest_email?: string
+    guest_phone?: string
     service_id: number
     service_option_id?: number
     start_time: string

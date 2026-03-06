@@ -7,6 +7,7 @@ import type { Service, Appointment } from '../../types'
 // Feature components
 import ServiceCard from '../../features/services/ServiceCard'
 import AppointmentCard from '../../features/appointments/AppointmentCard'
+import NotificationPreferences from '../../features/notifications/NotificationPreferences'
 // Custom hooks
 import { useDebounce } from '../../hooks/useDebounce'
 
@@ -145,6 +146,11 @@ export default function UserDashboard() {
             <AppointmentCard key={appointment.id} appointment={appointment} />
           ))}
         </div>
+      </div>
+
+      {/* Notification settings */}
+      <div style={{ marginTop: '2rem' }}>
+        <NotificationPreferences />
       </div>
     </div>
   )

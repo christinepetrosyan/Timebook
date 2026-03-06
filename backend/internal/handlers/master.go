@@ -1,12 +1,15 @@
 package handlers
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"log"
 	"net/http"
 	"strings"
 
 	"github.com/timebook/backend/internal/models"
+	"golang.org/x/crypto/bcrypt"
 )
 
 func (h *Handlers) GetMasterProfile(w http.ResponseWriter, r *http.Request) {
@@ -400,6 +403,26 @@ func (h *Handlers) ConfirmAppointment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Send notification to client
+	if h.Notifier != nil {
+		h.DB.Preload("User").Preload("Service").Preload("Master").Preload("Master.User").First(confirmedAppointment, confirmedAppointment.ID)
+		if confirmedAppointment.User.ID != 0 {
+			pref, _ := h.Notifier.GetOrCreatePreferences(confirmedAppointment.User.ID)
+			masterName := ""
+			if confirmedAppointment.Master.ID != 0 && confirmedAppointment.Master.User.Name != "" {
+				masterName = confirmedAppointment.Master.User.Name
+			}
+			body := "Your appointment has been confirmed."
+			if confirmedAppointment.Service.ID != 0 {
+				body = "Your appointment for " + confirmedAppointment.Service.Name + " has been confirmed."
+			}
+			if masterName != "" {
+				body += " Master: " + masterName + "."
+			}
+			h.Notifier.SendAppointmentNotification(&confirmedAppointment.User, "Appointment Confirmed", body, pref)
+		}
+	}
+
 	respondWithJSON(w, http.StatusOK, confirmedAppointment)
 }
 
@@ -432,11 +455,25 @@ func (h *Handlers) RejectAppointment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Send notification to client
+	if h.Notifier != nil {
+		h.DB.Preload("User").Preload("Service").Preload("Master").Preload("Master.User").First(rejectedAppointment, rejectedAppointment.ID)
+		if rejectedAppointment.User.ID != 0 {
+			pref, _ := h.Notifier.GetOrCreatePreferences(rejectedAppointment.User.ID)
+			body := "Your appointment has been declined."
+			if rejectedAppointment.Service.ID != 0 {
+				body = "Your appointment for " + rejectedAppointment.Service.Name + " has been declined."
+			}
+			h.Notifier.SendAppointmentNotification(&rejectedAppointment.User, "Appointment Declined", body, pref)
+		}
+	}
+
 	respondWithJSON(w, http.StatusOK, rejectedAppointment)
 }
 
 // CreateAppointmentForClient allows a master to create an appointment on behalf of a client.
 // Used for the "Work" flow when booking from the master calendar.
+// Accepts either user_id (existing client) OR guest_name, guest_email, guest_phone (new guest).
 func (h *Handlers) CreateAppointmentForClient(w http.ResponseWriter, r *http.Request) {
 	masterUserID, ok := getContextUserID(w, r)
 	if !ok {
@@ -451,6 +488,9 @@ func (h *Handlers) CreateAppointmentForClient(w http.ResponseWriter, r *http.Req
 
 	var req struct {
 		UserID          uint   `json:"user_id"`
+		GuestName       string `json:"guest_name"`
+		GuestEmail      string `json:"guest_email"`
+		GuestPhone      string `json:"guest_phone"`
 		ServiceID       uint   `json:"service_id"`
 		ServiceOptionID *uint  `json:"service_option_id,omitempty"`
 		StartTime       string `json:"start_time"`
@@ -469,10 +509,59 @@ func (h *Handlers) CreateAppointmentForClient(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Verify client user exists and has role "user"
 	var client models.User
-	if err := h.DB.Where("id = ? AND role = ?", req.UserID, models.RoleUser).First(&client).Error; err != nil {
-		respondWithError(w, http.StatusNotFound, "Client not found")
+
+	if req.UserID != 0 {
+		// Existing client
+		if err := h.DB.Where("id = ? AND role = ?", req.UserID, models.RoleUser).First(&client).Error; err != nil {
+			respondWithError(w, http.StatusNotFound, "Client not found")
+			return
+		}
+	} else if req.GuestEmail != "" && req.GuestName != "" {
+		// New guest: create placeholder user
+		req.GuestEmail = strings.TrimSpace(strings.ToLower(req.GuestEmail))
+		req.GuestName = strings.TrimSpace(req.GuestName)
+		if len(req.GuestEmail) < 3 {
+			respondWithError(w, http.StatusBadRequest, "Valid guest email is required")
+			return
+		}
+
+		// Check if email already exists
+		if err := h.DB.Where("email = ?", req.GuestEmail).First(&client).Error; err == nil {
+			if client.IsGuest {
+				// Reuse existing guest
+			} else {
+				respondWithError(w, http.StatusConflict, "A user with this email already exists. Search for them instead.")
+				return
+			}
+		} else {
+			// Create new guest user with random password
+			b := make([]byte, 32)
+			if _, err := rand.Read(b); err != nil {
+				respondWithError(w, http.StatusInternalServerError, "Failed to create guest")
+				return
+			}
+			randomPass := base64.URLEncoding.EncodeToString(b)
+			hashedPassword, err := bcrypt.GenerateFromPassword([]byte(randomPass), bcrypt.DefaultCost)
+			if err != nil {
+				respondWithError(w, http.StatusInternalServerError, "Failed to create guest")
+				return
+			}
+			client = models.User{
+				Email:    req.GuestEmail,
+				Password: string(hashedPassword),
+				Name:     req.GuestName,
+				Phone:    strings.TrimSpace(req.GuestPhone),
+				Role:     models.RoleUser,
+				IsGuest:  true,
+			}
+			if err := h.DB.Create(&client).Error; err != nil {
+				respondWithError(w, http.StatusBadRequest, "Failed to create guest: "+err.Error())
+				return
+			}
+		}
+	} else {
+		respondWithError(w, http.StatusBadRequest, "Provide either user_id or guest_name and guest_email")
 		return
 	}
 
@@ -526,7 +615,7 @@ func (h *Handlers) CreateAppointmentForClient(w http.ResponseWriter, r *http.Req
 	}
 
 	appointment := models.Appointment{
-		UserID:          req.UserID,
+		UserID:          client.ID,
 		MasterID:        masterProfile.ID,
 		ServiceID:       req.ServiceID,
 		ServiceOptionID: req.ServiceOptionID,
