@@ -137,13 +137,17 @@ func main() {
 	handler := middleware.CORSMiddleware(cfg.CORSAllowedOrigins)(mux)
 
 	// Start server
-	port := os.Getenv("SERVER_PORT")
+	port := os.Getenv("PORT") // Azure sets this
+	if port == "" {
+		port = os.Getenv("SERVER_PORT")
+	}
 	if port == "" {
 		port = cfg.ServerPort
 	}
 
 	log.Printf("Server starting on %s:%s", cfg.ServerHost, port)
-	if err := http.ListenAndServe(cfg.ServerHost+":"+port, handler); err != nil {
+
+	if err := http.ListenAndServe(":"+port, handler); err != nil {
 		log.Fatalf("Server failed to start: %v", err)
 	}
 }
