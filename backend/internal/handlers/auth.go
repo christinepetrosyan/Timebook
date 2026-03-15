@@ -29,6 +29,20 @@ type AuthResponse struct {
 	User  models.User `json:"user"`
 }
 
+type RegisterVerificationResponse struct {
+	RequiresVerification bool   `json:"requires_verification"`
+	Email                string `json:"email"`
+}
+
+type VerifyEmailRequest struct {
+	Email string `json:"email"`
+	Code  string `json:"code"`
+}
+
+type ResendCodeRequest struct {
+	Email string `json:"email"`
+}
+
 func (h *Handlers) Register(w http.ResponseWriter, r *http.Request) {
 	var req RegisterRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -66,7 +80,19 @@ func (h *Handlers) Register(w http.ResponseWriter, r *http.Request) {
 				respondWithError(w, http.StatusInternalServerError, "Failed to claim account")
 				return
 			}
-			// Generate token and return (skip master profile creation for claimed users)
+			// Require email verification if not already verified
+			if !user.EmailVerified {
+				if _, err := h.VerificationService.GenerateAndSendCode(user.ID, user.Email); err != nil {
+					respondWithError(w, http.StatusInternalServerError, "Failed to send verification email")
+					return
+				}
+				respondWithJSON(w, http.StatusOK, RegisterVerificationResponse{
+					RequiresVerification: true,
+					Email:               user.Email,
+				})
+				return
+			}
+			// Already verified: generate token and return
 			token, err := generateToken(user, h.Config.JWTSecret)
 			if err != nil {
 				respondWithError(w, http.StatusInternalServerError, "Failed to generate token")
@@ -81,13 +107,14 @@ func (h *Handlers) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// New user
+	// New user (email_verified = false)
 	user = models.User{
-		Email:    req.Email,
-		Password: string(hashedPassword),
-		Name:     req.Name,
-		Phone:    req.Phone,
-		Role:     role,
+		Email:         req.Email,
+		Password:      string(hashedPassword),
+		Name:          req.Name,
+		Phone:         req.Phone,
+		Role:          role,
+		EmailVerified: false,
 	}
 
 	if err := h.DB.Create(&user).Error; err != nil {
@@ -103,17 +130,15 @@ func (h *Handlers) Register(w http.ResponseWriter, r *http.Request) {
 		h.DB.Create(&masterProfile)
 	}
 
-	// Generate token
-	token, err := generateToken(user, h.Config.JWTSecret)
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Failed to generate token")
+	// Send verification code
+	if _, err := h.VerificationService.GenerateAndSendCode(user.ID, user.Email); err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Failed to send verification email")
 		return
 	}
 
-	user.Password = "" // Don't send password back
-	respondWithJSON(w, http.StatusCreated, AuthResponse{
-		Token: token,
-		User:  user,
+	respondWithJSON(w, http.StatusCreated, RegisterVerificationResponse{
+		RequiresVerification: true,
+		Email:               user.Email,
 	})
 }
 
@@ -168,6 +193,51 @@ func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	json.NewEncoder(w).Encode(payload)
+}
+
+func (h *Handlers) VerifyEmail(w http.ResponseWriter, r *http.Request) {
+	var req VerifyEmailRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	if req.Email == "" || req.Code == "" {
+		respondWithError(w, http.StatusBadRequest, "Email and code are required")
+		return
+	}
+
+	user, err := h.VerificationService.VerifyCode(req.Email, req.Code)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	token, err := generateToken(*user, h.Config.JWTSecret)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Failed to generate token")
+		return
+	}
+	user.Password = ""
+	respondWithJSON(w, http.StatusOK, AuthResponse{Token: token, User: *user})
+}
+
+func (h *Handlers) ResendCode(w http.ResponseWriter, r *http.Request) {
+	var req ResendCodeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	if req.Email == "" {
+		respondWithError(w, http.StatusBadRequest, "Email is required")
+		return
+	}
+
+	if err := h.VerificationService.ResendCode(req.Email); err != nil {
+		respondWithError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, map[string]string{"message": "Verification code sent"})
 }
 
 func respondWithError(w http.ResponseWriter, code int, message string) {

@@ -20,12 +20,13 @@ type User struct {
 	UpdatedAt time.Time      `json:"updated_at"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
 
-	Email    string   `gorm:"uniqueIndex;not null" json:"email"`
-	Password string   `gorm:"not null" json:"-"`
-	Name     string   `gorm:"not null" json:"name"`
-	Role     UserRole `gorm:"type:varchar(20);not null;default:'user'" json:"role"`
-	Phone    string   `json:"phone"`
-	IsGuest  bool     `gorm:"not null;default:false" json:"is_guest"`
+	Email         string   `gorm:"uniqueIndex;not null" json:"email"`
+	Password      string   `gorm:"not null" json:"-"`
+	Name          string   `gorm:"not null" json:"name"`
+	Role          UserRole `gorm:"type:varchar(20);not null;default:'user'" json:"role"`
+	Phone         string   `json:"phone"`
+	IsGuest       bool     `gorm:"not null;default:false" json:"is_guest"`
+	EmailVerified bool     `gorm:"not null;default:false" json:"email_verified"`
 
 	// Master-specific fields
 	MasterProfile *MasterProfile `gorm:"foreignKey:UserID" json:"master_profile,omitempty"`

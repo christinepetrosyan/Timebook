@@ -7,6 +7,7 @@ export interface User {
   role: UserRole
   phone?: string
   is_guest?: boolean
+  email_verified?: boolean
   created_at: string
   updated_at: string
 }

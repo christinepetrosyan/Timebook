@@ -46,12 +46,16 @@ func main() {
 	// Public routes
 	mux.HandleFunc("POST /api/v1/auth/register", h.Register)
 	mux.HandleFunc("POST /api/v1/auth/login", h.Login)
+	mux.HandleFunc("POST /api/v1/auth/verify-email", h.VerifyEmail)
+	mux.HandleFunc("POST /api/v1/auth/resend-code", h.ResendCode)
 	mux.HandleFunc("GET /api/v1/services", h.GetServices)
 	mux.HandleFunc("GET /api/v1/services/{id}/slots", h.GetAvailableSlots)
 
 	// Legacy routes (redirect to v1) for backward compatibility
 	mux.HandleFunc("POST /api/auth/register", h.Register)
 	mux.HandleFunc("POST /api/auth/login", h.Login)
+	mux.HandleFunc("POST /api/auth/verify-email", h.VerifyEmail)
+	mux.HandleFunc("POST /api/auth/resend-code", h.ResendCode)
 	mux.HandleFunc("GET /api/services", h.GetServices)
 	mux.HandleFunc("GET /api/services/{id}/slots", h.GetAvailableSlots)
 

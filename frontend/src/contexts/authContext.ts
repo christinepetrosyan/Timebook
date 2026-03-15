@@ -1,5 +1,6 @@
 import { createContext } from 'react'
-import type { User } from '../types'
+import type { User, AuthResponse } from '../types'
+import type { RegisterVerificationResponse } from '../services/api'
 
 export interface AuthContextType {
   user: User | null
@@ -11,7 +12,8 @@ export interface AuthContextType {
     name: string
     phone?: string
     role?: string
-  }) => Promise<void>
+  }) => Promise<AuthResponse | RegisterVerificationResponse>
+  verifyEmail: (email: string, code: string) => Promise<void>
   logout: () => void
   isAuthenticated: boolean
 }

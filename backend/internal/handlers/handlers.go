@@ -13,11 +13,12 @@ import (
 )
 
 type Handlers struct {
-	DB                 *gorm.DB
-	Config             *config.Config
-	AppointmentService *services.AppointmentService
-	MasterService      *services.MasterService
-	Notifier           *notifications.Dispatcher
+	DB                  *gorm.DB
+	Config              *config.Config
+	AppointmentService  *services.AppointmentService
+	MasterService       *services.MasterService
+	Notifier            *notifications.Dispatcher
+	VerificationService *services.VerificationService
 }
 
 func New(db *gorm.DB, cfg *config.Config) *Handlers {
@@ -49,13 +50,15 @@ func New(db *gorm.DB, cfg *config.Config) *Handlers {
 	viberProvider := &notifications.ViberProvider{AuthToken: cfg.ViberAuthToken}
 
 	notifier := notifications.NewDispatcher(db, emailProvider, telegramProvider, whatsappProvider, viberProvider)
+	verificationService := services.NewVerificationService(db, emailProvider)
 
 	return &Handlers{
-		DB:                 db,
-		Config:             cfg,
-		AppointmentService: appointmentService,
-		MasterService:      masterService,
-		Notifier:           notifier,
+		DB:                  db,
+		Config:              cfg,
+		AppointmentService:  appointmentService,
+		MasterService:       masterService,
+		Notifier:            notifier,
+		VerificationService: verificationService,
 	}
 }
 

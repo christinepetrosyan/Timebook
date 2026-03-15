@@ -1,6 +1,6 @@
 import { useState, ReactNode } from 'react'
 import { authAPI } from '../services/api'
-import type { User } from '../types'
+import type { User, AuthResponse } from '../types'
 import { AuthContext } from './authContext'
 
 function getStoredUser(): User | null {
@@ -36,6 +36,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     role?: string
   }) => {
     const response = await authAPI.register(data)
+    if ('requires_verification' in response && response.requires_verification) {
+      return response
+    }
+    const auth = response as AuthResponse
+    setToken(auth.token)
+    setUser(auth.user)
+    localStorage.setItem('token', auth.token)
+    localStorage.setItem('user', JSON.stringify(auth.user))
+    return auth
+  }
+
+  const verifyEmail = async (email: string, code: string) => {
+    const response = await authAPI.verifyEmail(email, code)
     setToken(response.token)
     setUser(response.user)
     localStorage.setItem('token', response.token)
@@ -56,6 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         token,
         login,
         register,
+        verifyEmail,
         logout,
         isAuthenticated: !!token && !!user,
       }}

@@ -20,7 +20,11 @@ export default function Register() {
     setError('')
 
     try {
-      await register(formData)
+      const result = await register(formData)
+      if ('requires_verification' in result && result.requires_verification) {
+        navigate(`/verify-email?email=${encodeURIComponent(result.email)}`)
+        return
+      }
       navigate(`/${formData.role}/dashboard`)
     } catch (err: unknown) {
       setError(getApiErrorMessage(err, 'Registration failed'))

@@ -29,6 +29,11 @@ export function getApiErrorMessage(error: unknown, fallback: string): string {
   return fallback
 }
 
+export type RegisterVerificationResponse = {
+  requires_verification: true
+  email: string
+}
+
 // Auth API
 export const authAPI = {
   register: async (data: {
@@ -37,14 +42,23 @@ export const authAPI = {
     name: string
     phone?: string
     role?: string
-  }): Promise<AuthResponse> => {
-    const response = await api.post<AuthResponse>('/auth/register', data)
+  }): Promise<AuthResponse | RegisterVerificationResponse> => {
+    const response = await api.post<AuthResponse | RegisterVerificationResponse>('/auth/register', data)
     return response.data
   },
 
   login: async (email: string, password: string): Promise<AuthResponse> => {
     const response = await api.post<AuthResponse>('/auth/login', { email, password })
     return response.data
+  },
+
+  verifyEmail: async (email: string, code: string): Promise<AuthResponse> => {
+    const response = await api.post<AuthResponse>('/auth/verify-email', { email, code })
+    return response.data
+  },
+
+  resendVerificationCode: async (email: string): Promise<void> => {
+    await api.post('/auth/resend-code', { email })
   },
 }
 
